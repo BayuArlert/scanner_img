@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scanner - Gemini AI</title>
+</head>
+
+<body>
+  <main>
+    <h1>Scanner With Gemini AI</h1>
+    <br>
+    <form>
+      <div class="upload-img">
+        <input type="file" id="imageInput" multiple accept=".jpg,.jpeg,.png,.webp">
+      </div>
+      <div class="prompt-box">
+        <label>
+          <input name="prompt" placeholder="Enter instructions here" type="text"
+            value="Berikan HANYA nomor HP dari gambar tanpa penjelasan atau kalimat tambahan. Format: 628xxxxxxxxxx. Jika tidak terdeteksi nomor HP pada gambar maka berikan kalimat NotFound">
+        </label>
+        <button class="go" type="submit">Go</button>
+        <button class="unduh" id="downloadButton" style="display:none;">Unduh Hasil</button>
+        <!-- Tambahkan tombol unduh -->
+      </div>
+    </form>
+    <p class="output">(Results will appear here)</p>
+  </main>
+  <section>
+    <button id="refresh">Refresh</button>
+  </section>
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>
