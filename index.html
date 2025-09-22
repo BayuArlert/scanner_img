@@ -1,36 +1,359 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phone Scanner - Extract Phone Numbers from Images</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scanner - Gemini AI</title>
-</head>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: white;
+        min-height: 100vh;
+        padding: 20px;
+      }
 
-<body>
-  <main>
-    <h1>Scanner With Gemini AI</h1>
-    <br>
-    <form>
-      <div class="upload-img">
-        <input type="file" id="imageInput" multiple accept=".jpg,.jpeg,.png,.webp">
-      </div>
-      <div class="prompt-box">
-        <label>
-          <input name="prompt" placeholder="Enter instructions here" type="text"
-            value="Berikan HANYA nomor HP dari gambar tanpa penjelasan atau kalimat tambahan. Format: 628xxxxxxxxxx. Jika tidak terdeteksi nomor HP pada gambar maka berikan kalimat NotFound">
-        </label>
-        <button class="go" type="submit">Go</button>
-        <button class="unduh" id="downloadButton" style="display:none;">Unduh Hasil</button>
-        <!-- Tambahkan tombol unduh -->
-      </div>
-    </form>
-    <p class="output">(Results will appear here)</p>
-  </main>
-  <section>
-    <button id="refresh">Refresh</button>
-  </section>
-  <script type="module" src="/main.js"></script>
-</body>
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
 
+      .header {
+        background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 28px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      .header p {
+        opacity: 0.9;
+        font-size: 16px;
+      }
+
+      .main-content {
+        padding: 30px;
+      }
+
+      .form-section {
+        margin-bottom: 30px;
+      }
+
+      .form-section h3 {
+        color: #333;
+        margin-bottom: 15px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .input-group {
+        margin-bottom: 20px;
+      }
+
+      .input-group label {
+        display: block;
+        font-weight: 500;
+        color: #555;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      input[type="text"],
+      input[type="file"] {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background-color: #fafafa;
+      }
+
+      input[type="text"]:focus,
+      input[type="file"]:focus {
+        outline: none;
+        border-color: #2196f3;
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      }
+
+      .file-info {
+        margin-top: 8px;
+        padding: 12px;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #666;
+        border-left: 4px solid #e0e0e0;
+      }
+
+      .file-info.empty {
+        font-style: italic;
+        color: #999;
+      }
+
+      .file-info strong {
+        color: #333;
+      }
+
+      .submit-btn {
+        width: 100%;
+        padding: 16px 24px;
+        background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-top: 20px;
+      }
+
+      .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(76, 175, 80, 0.3);
+      }
+
+      .submit-btn:active {
+        transform: translateY(0);
+      }
+
+      .submit-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .download-btn {
+        display: none;
+        width: 100%;
+        padding: 16px 24px;
+        background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-top: 15px;
+      }
+
+      .download-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(255, 152, 0, 0.3);
+      }
+
+      .output {
+        margin-top: 30px;
+        min-height: 50px;
+      }
+
+      .section-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e0e0e0, transparent);
+        margin: 25px 0;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .feature-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        border-left: 4px solid #2196f3;
+      }
+
+      .feature-card h4 {
+        color: #333;
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      .feature-card p {
+        color: #666;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+        }
+
+        .container {
+          margin: 0;
+          border-radius: 0;
+        }
+
+        .header {
+          padding: 20px;
+        }
+
+        .header h1 {
+          font-size: 24px;
+        }
+
+        .main-content {
+          padding: 20px;
+        }
+      }
+
+      /* Archive notification styles */
+      .archive-notification {
+        animation: slideIn 0.3s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Loading spinner animation */
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-spinner {
+        animation: spin 1s linear infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1>Phone Scanner AI</h1>
+        <p>Ekstrak nomor telepon dari gambar dan file RAR menggunakan AI</p>
+      </header>
+
+      <main class="main-content">
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h4>🤖 AI-Powered</h4>
+            <p>
+              Menggunakan Google Gemini AI untuk mengenali teks dalam gambar
+              dengan akurasi tinggi
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>📦 RAR Support</h4>
+            <p>Ekstrak otomatis gambar dari file RAR dan proses secara batch</p>
+          </div>
+          <div class="feature-card">
+            <h4>📊 Export Excel</h4>
+            <p>
+              Download hasil scanning dalam format Excel (.xlsx) untuk mudah
+              digunakan
+            </p>
+          </div>
+        </div>
+
+        <form id="scanForm">
+          <div class="form-section">
+            <h3>🎯 Prompt untuk AI</h3>
+            <div class="input-group">
+              <label for="prompt"
+                >Instruksi untuk AI (apa yang ingin diekstrak):</label
+              >
+              <input
+                type="text"
+                name="prompt"
+                id="prompt"
+                placeholder="Contoh: Extract phone number from this image, give me only the number without any explanation"
+                value="Extract phone number from this image, give me only the number without any explanation"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="section-divider"></div>
+
+          <div class="form-section">
+            <h3>🖼️ Upload Gambar</h3>
+            <div class="input-group">
+              <label for="imageInput"
+                >Pilih file gambar (JPG, PNG, WEBP, GIF):</label
+              >
+              <input type="file" id="imageInput" accept="image/*" multiple />
+              <div id="imageFileInfo" class="file-info empty">
+                Belum ada file gambar yang dipilih
+              </div>
+            </div>
+          </div>
+
+          <div class="section-divider"></div>
+
+          <div class="form-section">
+            <h3>📦 Upload File RAR</h3>
+            <div class="input-group">
+              <label for="archiveInput"
+                >Pilih file RAR yang berisi gambar:</label
+              >
+              <input
+                type="file"
+                id="archiveInput"
+                accept=".rar,.zip"
+                multiple
+              />
+              <div id="archiveFileInfo" class="file-info empty">
+                Belum ada file arsip yang dipilih
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn">
+            🚀 Mulai Scan Nomor Telepon
+          </button>
+        </form>
+
+        <button id="downloadButton" class="download-btn">
+          📥 Download Hasil Excel
+        </button>
+
+        <div class="output" id="output">
+          <div style="text-align: center; color: #666; padding: 40px">
+            <p>
+              Pilih gambar atau file RAR, lalu klik "Mulai Scan" untuk memproses
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+  </body>
 </html>

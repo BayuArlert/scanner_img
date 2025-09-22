@@ -6,11 +6,12 @@ body {
   color: #202124;
 }
 
+
 main,
 .api-key-banner {
   width: 100%;
   padding: 24px;
-  max-width: 460px;
+  max-width: 900px;
   margin: 0 auto;
   border-radius: 20px;
 }
@@ -36,9 +37,11 @@ main {
 h1 {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   margin: 0 auto;
   font-size: 24px;
+  text-align: center;
 }
 
 h1::before {
@@ -111,11 +114,13 @@ form {
 }
 
 .prompt-box {
-  margin: 24px 0;
+  margin: 24px auto;
   width: 100%;
+  max-width: 600px;
   display: flex;
   gap: 8px;
   align-items: flex-end;
+  justify-content: center;
 }
 
 label {
@@ -153,8 +158,109 @@ button:hover {
   opacity: 0.95;
 }
 
-#refresh {
-  border-color: grey;
-  background-color: grey;
+
+/* Upload sections container */
+.upload-container {
+  display: flex;
+  gap: 16px;
+  margin: 20px auto;
+  justify-content: center;
+  max-width: 800px;
 }
 
+/* Upload sections styling */
+.upload-section {
+  flex: 1;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background-color: #fafafa;
+}
+
+.upload-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-img {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-img input[type="file"] {
+  padding: 12px;
+  border: 2px dashed #ccc;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  min-height: 40px;
+  display: block;
+}
+
+.upload-img input[type="file"]:hover {
+  border-color: var(--accent-color);
+  background-color: #f8f9ff;
+}
+
+.upload-label {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.file-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #e8f4fd;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1976d2;
+  min-height: 20px;
+}
+
+.file-info.empty {
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+/* Different styling for RAR section */
+.upload-section:last-of-type {
+  border-color: #ff9800;
+  background-color: #fff3e0;
+}
+
+.upload-section:last-of-type h3 {
+  color: #e65100;
+}
+
+.upload-section:last-of-type .file-info {
+  background-color: #ffe0b2;
+  color: #e65100;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+  .upload-container {
+    flex-direction: column;
+    gap: 12px;
+    max-width: 100%;
+    padding: 0 10px;
+  }
+  
+  .upload-section {
+    margin: 0;
+  }
+  
+  main {
+    max-width: 100%;
+    padding: 16px;
+  }
+}
