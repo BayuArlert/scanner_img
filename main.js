@@ -16,6 +16,11 @@ let API_KEYS = [
   import.meta.env.VITE_GEMINI_API_KEY_3,
   import.meta.env.VITE_GEMINI_API_KEY_4,
   import.meta.env.VITE_GEMINI_API_KEY_5,
+  import.meta.env.VITE_GEMINI_API_KEY_6,
+  import.meta.env.VITE_GEMINI_API_KEY_7,
+  import.meta.env.VITE_GEMINI_API_KEY_8,
+  import.meta.env.VITE_GEMINI_API_KEY_9,
+  import.meta.env.VITE_GEMINI_API_KEY_10,
 ].filter((key) => key); // Filter out any undefined or empty keys
 
 console.log("🚀 Starting Phone Scanner App...");
