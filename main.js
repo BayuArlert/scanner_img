@@ -470,15 +470,51 @@ function initializeApp() {
 
     downloadButton.onclick = async () => {
       console.log("📥 Downloading results...");
-      const formattedResults = currentResults.map((nomor) => {
-        return nomor.replace(/-/g, "").replace(/\s/g, "").replace(/^08/, "628");
-      });
-      const worksheet = XLSX.utils.json_to_sheet(
-        formattedResults.map((nomor) => ({ NomorTelepon: nomor }))
-      );
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Nomor Telepon");
-      XLSX.writeFile(workbook, "nomor_telepon.xlsx");
+      
+      // Clean and format phone numbers to 628 format only
+      const formattedResults = currentResults
+        .map((nomor) => {
+          // Remove all non-digit characters
+          const cleanNumber = nomor.replace(/\D/g, "");
+          
+          // Convert to 628 format if it starts with 08
+          if (cleanNumber.startsWith("08")) {
+            return "628" + cleanNumber.substring(2);
+          }
+          
+          // If it already starts with 62, keep as is
+          if (cleanNumber.startsWith("62")) {
+            return cleanNumber;
+          }
+          
+          // If it starts with 0, convert to 62
+          if (cleanNumber.startsWith("0")) {
+            return "62" + cleanNumber.substring(1);
+          }
+          
+          // If it doesn't start with 62 or 0, assume it needs 628 prefix
+          return "628" + cleanNumber;
+        })
+        .filter((nomor) => {
+          // Only keep valid phone numbers (10-13 digits after 628)
+          return nomor.startsWith("628") && nomor.length >= 11 && nomor.length <= 14;
+        });
+
+      // Create a simple text file with one phone number per line
+      const textContent = formattedResults.join('\n');
+      const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nomor_telepon.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log(`📥 Downloaded ${formattedResults.length} phone numbers`);
     };
   }
 
@@ -777,12 +813,26 @@ function initializeApp() {
               }
             }
 
-            // Extract phone number
+            // Extract phone number and clean it
             const phoneMatch = aggregatedResult.match(
               /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
             );
             if (phoneMatch) {
-              aggregatedResult = phoneMatch[1].replace(/^08/, "628");
+              let phoneNumber = phoneMatch[1];
+              
+              // Remove all non-digit characters
+              phoneNumber = phoneNumber.replace(/\D/g, "");
+              
+              // Convert to 628 format
+              if (phoneNumber.startsWith("08")) {
+                phoneNumber = "628" + phoneNumber.substring(2);
+              } else if (phoneNumber.startsWith("0")) {
+                phoneNumber = "62" + phoneNumber.substring(1);
+              } else if (!phoneNumber.startsWith("62")) {
+                phoneNumber = "628" + phoneNumber;
+              }
+              
+              aggregatedResult = phoneNumber;
             }
 
             console.log(
