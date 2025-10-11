@@ -40,37 +40,61 @@ if (API_KEYS.length === 0) {
 let currentApiKeyIndex = 0;
 let apiKeyUsageCount = {}; // Track usage count for each API key
 let apiKeyErrors = {}; // Track errors for each API key
+let apiKeyLimitStatus = {}; // Track if API key is currently at limit
 
 // Initialize API key tracking
-API_KEYS.forEach((key) => {
+API_KEYS.forEach((key, index) => {
   apiKeyUsageCount[key] = 0;
   apiKeyErrors[key] = 0;
+  apiKeyLimitStatus[index] = false; // false = available, true = at limit
 });
 
-function getNextApiKey() {
-  // Find the key with the least errors
-  const minErrors = Math.min(...Object.values(apiKeyErrors));
-  const availableKeys = API_KEYS.filter(
-    (key) => apiKeyErrors[key] === minErrors
-  );
+function getCurrentApiKey() {
+  return API_KEYS[currentApiKeyIndex];
+}
 
-  // Among the keys with least errors, find the one with least usage
-  const minUsage = Math.min(
-    ...availableKeys.map((key) => apiKeyUsageCount[key])
-  );
-  const bestKeys = availableKeys.filter(
-    (key) => apiKeyUsageCount[key] === minUsage
-  );
+function getNextAvailableApiKey() {
+  // Cari API key berikutnya yang belum limit, mulai dari index sekarang
+  const startIndex = currentApiKeyIndex;
+  
+  for (let i = 0; i < API_KEYS.length; i++) {
+    const checkIndex = (startIndex + i) % API_KEYS.length;
+    if (!apiKeyLimitStatus[checkIndex]) {
+      currentApiKeyIndex = checkIndex;
+      console.log(`✅ Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
+      return API_KEYS[currentApiKeyIndex];
+    }
+  }
+  
+  // Jika semua API key limit, return null
+  return null;
+}
 
-  // Select a random key from the best candidates
-  const selectedKey = bestKeys[Math.floor(Math.random() * bestKeys.length)];
-  currentApiKeyIndex = API_KEYS.indexOf(selectedKey);
-  return selectedKey;
+function markApiKeyAsLimit(apiKey) {
+  const keyIndex = API_KEYS.indexOf(apiKey);
+  if (keyIndex !== -1) {
+    apiKeyLimitStatus[keyIndex] = true;
+    console.log(`⚠️ API Key ${keyIndex + 1} ditandai sebagai limit`);
+  }
+}
+
+function areAllApiKeysAtLimit() {
+  return Object.values(apiKeyLimitStatus).every(status => status === true);
+}
+
+function resetAllApiKeyLimits() {
+  API_KEYS.forEach((key, index) => {
+    apiKeyLimitStatus[index] = false;
+  });
+  console.log("🔄 Semua status limit API key direset");
 }
 
 function rotateApiKey() {
-  currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.length;
-  return API_KEYS[currentApiKeyIndex];
+  // Tandai API key saat ini sebagai limit
+  markApiKeyAsLimit(API_KEYS[currentApiKeyIndex]);
+  
+  // Cari API key berikutnya yang available
+  return getNextAvailableApiKey();
 }
 
 // Helper functions - define these globally so they're available everywhere
@@ -530,12 +554,12 @@ function initializeApp() {
   async function fetchWithRetryAndTimeout(
     requestFunc,
     currentFile,
-    maxRetries = 3,
+    maxRetries = 5,
     delay = 2000,
     timeout = 20000
   ) {
     let lastError = null;
-    let currentKey = getNextApiKey();
+    let currentKey = getCurrentApiKey();
     let retryCount = 0;
 
     while (retryCount < maxRetries) {
@@ -544,13 +568,13 @@ function initializeApp() {
         apiKeyUsageCount[currentKey]++;
 
         console.log(
-          `🔑 Using API Key ${currentApiKeyIndex + 1} for ${currentFile.name}`
+          `🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length} untuk ${currentFile.name}`
         );
 
         const result = await fetchWithTimeout(requestFunc, timeout);
         const endTime = Date.now();
         console.log(
-          `⏱️ Response time for ${currentFile.name}: ${endTime - startTime} ms`
+          `⏱️ Response time untuk ${currentFile.name}: ${endTime - startTime} ms`
         );
         consecutiveApiLimitErrors = 0;
         return result;
@@ -558,45 +582,75 @@ function initializeApp() {
         lastError = error;
         retryCount++;
         console.warn(
-          `⚠️ Attempt ${retryCount} failed for ${currentFile.name}:`,
+          `⚠️ Percobaan ${retryCount} gagal untuk ${currentFile.name}:`,
           error.message
         );
 
         const isApiLimitError =
           error.message.includes("quota") ||
           error.message.includes("limit") ||
-          error.message.includes("rate");
+          error.message.includes("rate") ||
+          error.message.includes("429");
 
         if (isApiLimitError) {
           apiLimitCount++;
           consecutiveApiLimitErrors++;
           apiKeyErrors[currentKey]++;
 
-          const baseDelay = 30000;
-          const delayMultiplier = Math.pow(2, consecutiveApiLimitErrors - 1);
-          const backoffDelay = baseDelay * delayMultiplier;
-
-          console.log(
-            `🕒 API limit hit, waiting ${Math.round(backoffDelay / 1000)}s...`
-          );
-          if (output) {
-            output.innerHTML = `<p>Processing... Please wait (${Math.round(
-              backoffDelay / 1000
-            )}s)</p>`;
+          console.log(`⚠️ API Key ${currentApiKeyIndex + 1} terkena limit!`);
+          
+          // Coba rotate ke API key berikutnya
+          const nextKey = rotateApiKey();
+          
+          if (nextKey === null) {
+            // Semua API key sudah limit, tunggu 30 detik
+            const waitTime = 30000;
+            console.log(`⏰ Semua API Key limit! Menunggu ${waitTime / 1000} detik...`);
+            
+            if (output) {
+              output.innerHTML = `
+                <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+                  <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+                    ⏰ Semua API Key Mencapai Limit
+                  </div>
+                  <div style="font-size: 14px; color: #666;">
+                    Menunggu ${waitTime / 1000} detik sebelum mencoba lagi...<br>
+                    API Keys yang digunakan: ${API_KEYS.length}<br>
+                    File: ${currentFile.name}
+                  </div>
+                  <div style="margin-top: 8px;">
+                    <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #ff9800; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                  </div>
+                </div>
+              `;
+            }
+            
+            await sleep(waitTime);
+            
+            // Reset semua status limit
+            resetAllApiKeyLimits();
+            currentApiKeyIndex = 0; // Mulai lagi dari API key pertama
+            currentKey = getCurrentApiKey();
+            
+            console.log(`✅ Melanjutkan dengan API Key ${currentApiKeyIndex + 1}`);
+          } else {
+            // Berhasil pindah ke API key berikutnya
+            currentKey = nextKey;
+            console.log(`🔄 Beralih ke API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
+            
+            // Tunggu sebentar sebelum retry dengan API key baru
+            await sleep(2000);
           }
-          await sleep(backoffDelay);
-
-          currentKey = rotateApiKey();
-          console.log(`🔄 Switched to API Key ${currentApiKeyIndex + 1}`);
         } else {
+          // Error bukan karena limit, tunggu dengan backoff
           const backoffDelay = delay * Math.pow(2, retryCount - 1);
-          console.log(`🔄 Retrying in ${backoffDelay} ms...`);
+          console.log(`🔄 Retry dalam ${backoffDelay} ms...`);
           await sleep(backoffDelay);
         }
       }
     }
     throw new Error(
-      `Failed after ${maxRetries} attempts. Last error: ${lastError.message}`
+      `Gagal setelah ${maxRetries} percobaan. Error terakhir: ${lastError.message}`
     );
   }
 
@@ -632,10 +686,13 @@ function initializeApp() {
     if (downloadButton) downloadButton.style.display = "none";
 
     // Reset API key tracking
-    API_KEYS.forEach((key) => {
+    API_KEYS.forEach((key, index) => {
       apiKeyUsageCount[key] = 0;
       apiKeyErrors[key] = 0;
+      apiKeyLimitStatus[index] = false; // Reset status limit
     });
+    currentApiKeyIndex = 0; // Mulai dari API key pertama
+    console.log("🔄 Status API key direset, mulai dari API Key 1");
 
     try {
       // Show initial status
@@ -734,22 +791,26 @@ function initializeApp() {
 
       await sleep(1500); // Show summary briefly
 
-      // Initialize AI model
-      console.log("🤖 Initializing Gemini AI...");
-      const genAI = new GoogleGenerativeAI(getNextApiKey());
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-        safetySettings: [
-          {
-            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-            threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-          },
-        ],
-      });
+      console.log("🤖 Menyiapkan Gemini AI...");
+      console.log(`🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
 
       const batchSize = 2; // Conservative batch size
       const totalFiles = allImages.length;
       let processedCount = 0;
+
+      // Helper function to create model with current API key
+      const createModel = () => {
+        const genAI = new GoogleGenerativeAI(getCurrentApiKey());
+        return genAI.getGenerativeModel({
+          model: "gemini-2.5-flash",
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+          ],
+        });
+      };
 
       // Process images in batches
       for (let i = 0; i < totalFiles; i += batchSize) {
@@ -797,9 +858,12 @@ function initializeApp() {
               return;
             }
 
-            // Make AI request
+            // Make AI request - model dibuat di dalam request function agar menggunakan API key yang aktif
             const result = await fetchWithRetryAndTimeout(
-              () => model.generateContentStream({ contents: [contents] }),
+              () => {
+                const model = createModel();
+                return model.generateContentStream({ contents: [contents] });
+              },
               currentFile,
               3,
               3000,
@@ -1027,7 +1091,7 @@ function initializeApp() {
 
   // Show API key banner if available
   if (API_KEYS.length > 0) {
-    maybeShowApiKeyBanner(API_KEYS[currentApiKeyIndex]);
+    maybeShowApiKeyBanner(getCurrentApiKey());
   }
 
   console.log("✅ App initialization completed successfully!");
