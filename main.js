@@ -473,7 +473,11 @@ function initializeApp() {
       return;
     }
 
-    const fileList = files
+    const maxDisplayFiles = 5; // Maksimal file yang ditampilkan
+    const displayFiles = files.slice(0, maxDisplayFiles);
+    const remainingCount = files.length - maxDisplayFiles;
+
+    const fileList = displayFiles
       .map((file) => {
         const size = (file.size / 1024 / 1024).toFixed(2);
         return `• ${file.name} (${size} MB)`;
@@ -486,6 +490,7 @@ function initializeApp() {
     infoElement.innerHTML = `
       <strong>${files.length} file ${fileType} dipilih (${totalSizeMB} MB):</strong><br>
       ${fileList}
+      ${remainingCount > 0 ? `<br><em style="color: #666; font-size: 13px;">...dan ${remainingCount} file lainnya</em>` : ''}
     `;
   }
 
