@@ -817,6 +817,94 @@ function initializeApp() {
         });
       };
 
+      // Helper function to process a single file
+      const processSingleFile = async (currentFile, retryAttempt = 0) => {
+        try {
+          console.log(`🔍 Processing file: ${currentFile.name}${retryAttempt > 0 ? ` (Retry ${retryAttempt})` : ''}`);
+
+          // Convert to base64
+          const imageBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) =>
+              resolve(event.target.result.split(",")[1]);
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(currentFile);
+          });
+
+          const contents = {
+            role: "user",
+            parts: [
+              {
+                inline_data: {
+                  mime_type: currentFile.type,
+                  data: imageBase64,
+                },
+              },
+              { text: promptInput.value },
+            ],
+          };
+
+          // Check cache
+          const cacheKey = JSON.stringify(contents);
+          if (cache[cacheKey]) {
+            console.log(`💾 Using cached result for ${currentFile.name}`);
+            return cache[cacheKey];
+          }
+
+          // Make AI request
+          const result = await fetchWithRetryAndTimeout(
+            () => {
+              const model = createModel();
+              return model.generateContentStream({ contents: [contents] });
+            },
+            currentFile,
+            3,
+            3000,
+            25000
+          );
+
+          let aggregatedResult = "";
+          for await (let response of result.stream) {
+            if (response.text) {
+              aggregatedResult += response.text();
+            }
+          }
+
+          // Extract phone number and clean it
+          const phoneMatch = aggregatedResult.match(
+            /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
+          );
+          if (phoneMatch) {
+            let phoneNumber = phoneMatch[1];
+            
+            // Remove all non-digit characters
+            phoneNumber = phoneNumber.replace(/\D/g, "");
+            
+            // Convert to 628 format
+            if (phoneNumber.startsWith("08")) {
+              phoneNumber = "628" + phoneNumber.substring(2);
+            } else if (phoneNumber.startsWith("0")) {
+              phoneNumber = "62" + phoneNumber.substring(1);
+            } else if (!phoneNumber.startsWith("62")) {
+              phoneNumber = "628" + phoneNumber;
+            }
+            
+            aggregatedResult = phoneNumber;
+          }
+
+          console.log(
+            `📞 Found result for ${currentFile.name}:`,
+            aggregatedResult
+          );
+
+          cache[cacheKey] = aggregatedResult;
+          return aggregatedResult;
+        } catch (error) {
+          console.error(`❌ Error processing ${currentFile.name}:`, error);
+          throw error;
+        }
+      };
+
       // Process images in batches
       for (let i = 0; i < totalFiles; i += batchSize) {
         const batchFiles = allImages.slice(i, i + batchSize);
@@ -828,93 +916,12 @@ function initializeApp() {
 
         const batchPromises = batchFiles.map(async (currentFile) => {
           try {
-            console.log(`🔍 Processing file: ${currentFile.name}`);
             updateProgress(processedCount, totalFiles, currentFile.name);
-
-            // Convert to base64
-            const imageBase64 = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = (event) =>
-                resolve(event.target.result.split(",")[1]);
-              reader.onerror = (error) => reject(error);
-              reader.readAsDataURL(currentFile);
-            });
-
-            const contents = {
-              role: "user",
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: currentFile.type,
-                    data: imageBase64,
-                  },
-                },
-                { text: promptInput.value },
-              ],
-            };
-
-            // Check cache
-            const cacheKey = JSON.stringify(contents);
-            if (cache[cacheKey]) {
-              console.log(`💾 Using cached result for ${currentFile.name}`);
-              currentResults.push(cache[cacheKey]);
-              processedCount++;
-              updateProgress(processedCount, totalFiles, currentFile.name);
-              return;
-            }
-
-            // Make AI request - model dibuat di dalam request function agar menggunakan API key yang aktif
-            const result = await fetchWithRetryAndTimeout(
-              () => {
-                const model = createModel();
-                return model.generateContentStream({ contents: [contents] });
-              },
-              currentFile,
-              3,
-              3000,
-              25000
-            );
-
-            let aggregatedResult = "";
-            for await (let response of result.stream) {
-              if (response.text) {
-                aggregatedResult += response.text();
-              }
-            }
-
-            // Extract phone number and clean it
-            const phoneMatch = aggregatedResult.match(
-              /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
-            );
-            if (phoneMatch) {
-              let phoneNumber = phoneMatch[1];
-              
-              // Remove all non-digit characters
-              phoneNumber = phoneNumber.replace(/\D/g, "");
-              
-              // Convert to 628 format
-              if (phoneNumber.startsWith("08")) {
-                phoneNumber = "628" + phoneNumber.substring(2);
-              } else if (phoneNumber.startsWith("0")) {
-                phoneNumber = "62" + phoneNumber.substring(1);
-              } else if (!phoneNumber.startsWith("62")) {
-                phoneNumber = "628" + phoneNumber;
-              }
-              
-              aggregatedResult = phoneNumber;
-            }
-
-            console.log(
-              `📞 Found result for ${currentFile.name}:`,
-              aggregatedResult
-            );
-
-            cache[cacheKey] = aggregatedResult;
-            currentResults.push(aggregatedResult);
+            const result = await processSingleFile(currentFile);
+            currentResults.push(result);
             processedCount++;
             updateProgress(processedCount, totalFiles, currentFile.name);
           } catch (error) {
-            console.error(`❌ Error processing ${currentFile.name}:`, error);
             failedFiles.push(currentFile);
             processedCount++;
             updateProgress(processedCount, totalFiles, currentFile.name);
@@ -928,6 +935,104 @@ function initializeApp() {
           console.log("⏸️ Waiting before next batch...");
           await sleep(5000);
         }
+      }
+
+      // Retry failed files automatically
+      const maxRetryRounds = 3; // Maximum retry rounds for failed files
+      let retryRound = 1;
+
+      while (failedFiles.length > 0 && retryRound <= maxRetryRounds) {
+        console.log(`🔄 Starting retry round ${retryRound}/${maxRetryRounds} for ${failedFiles.length} failed files`);
+        
+        // Show retry status
+        if (output) {
+          output.innerHTML = `
+            <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+              <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+                🔄 Mengulang file yang gagal (Putaran ${retryRound}/${maxRetryRounds})
+              </div>
+              <div style="font-size: 14px; color: #666;">
+                File yang akan diulang: <strong>${failedFiles.length}</strong><br>
+                Berhasil sejauh ini: <strong>${currentResults.length}</strong> nomor telepon
+              </div>
+              <div style="margin-top: 8px;">
+                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #ff9800; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+              </div>
+            </div>
+            <style>
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
+          `;
+        }
+
+        // Wait a bit before retrying
+        await sleep(5000);
+
+        const filesToRetry = [...failedFiles];
+        failedFiles = []; // Reset failed files array
+        let retryProcessedCount = 0;
+
+        // Process retry files in batches
+        for (let i = 0; i < filesToRetry.length; i += batchSize) {
+          const batchFiles = filesToRetry.slice(i, i + batchSize);
+          console.log(
+            `🔄 Retry batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
+              filesToRetry.length / batchSize
+            )} (Round ${retryRound})`
+          );
+
+          const batchPromises = batchFiles.map(async (currentFile) => {
+            try {
+              // Update progress for retry
+              if (output) {
+                const progress = Math.round(((retryProcessedCount + 1) / filesToRetry.length) * 100);
+                output.innerHTML = `
+                  <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+                    <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+                      🔄 Mengulang file yang gagal (Putaran ${retryRound}/${maxRetryRounds})
+                    </div>
+                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                      Progress: ${retryProcessedCount}/${filesToRetry.length} (${progress}%)
+                    </div>
+                    <div style="font-size: 12px; color: #555;">
+                      Sedang proses: ${currentFile.name}
+                    </div>
+                    <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
+                      <div style="width: ${progress}%; height: 6px; background-color: #ff9800; border-radius: 4px; transition: width 0.3s ease;"></div>
+                    </div>
+                  </div>
+                `;
+              }
+
+              const result = await processSingleFile(currentFile, retryRound);
+              currentResults.push(result);
+              retryProcessedCount++;
+              console.log(`✅ Retry successful for ${currentFile.name}`);
+            } catch (error) {
+              failedFiles.push(currentFile);
+              retryProcessedCount++;
+              console.error(`❌ Retry failed for ${currentFile.name}`);
+            }
+          });
+
+          await Promise.all(batchPromises);
+
+          // Delay between retry batches
+          if (i + batchSize < filesToRetry.length) {
+            console.log("⏸️ Waiting before next retry batch...");
+            await sleep(5000);
+          }
+        }
+
+        if (failedFiles.length === 0) {
+          console.log(`🎉 All files processed successfully after ${retryRound} retry rounds!`);
+          break;
+        }
+
+        retryRound++;
       }
 
       // Complete
@@ -944,17 +1049,34 @@ function initializeApp() {
       console.log("✅ Processing completed!");
       console.log("📊 Results:", currentResults);
 
+      const successRate = Math.round(((totalFiles - failedFiles.length) / totalFiles) * 100);
+      const resultColor = failedFiles.length === 0 ? '#e8f5e8' : '#fff3e0';
+      const textColor = failedFiles.length === 0 ? '#2e7d32' : '#e65100';
+      const icon = failedFiles.length === 0 ? '✅' : '⚠️';
+
       if (output) {
         output.innerHTML = `
-          <div style="background-color: #e8f5e8; color: #2e7d32; padding: 16px; margin: 12px 0; border-radius: 8px; text-align: center;">
-            <div style="font-weight: bold; margin-bottom: 8px; font-size: 18px;">✅ Proses Selesai!</div>
-            <div style="font-size: 14px; line-height: 1.6;">
+          <div style="background-color: ${resultColor}; color: ${textColor}; padding: 16px; margin: 12px 0; border-radius: 8px; text-align: center; border-left: 4px solid ${textColor};">
+            <div style="font-weight: bold; margin-bottom: 8px; font-size: 18px;">${icon} Proses Selesai!</div>
+            <div style="font-size: 14px; line-height: 1.8;">
               Total gambar diproses: <strong>${totalFiles}</strong><br>
               Nomor telepon ditemukan: <strong>${currentResults.length}</strong><br>
-              File gagal diproses: <strong>${failedFiles.length}</strong><br>
+              Berhasil: <strong>${totalFiles - failedFiles.length}</strong> | Gagal: <strong>${failedFiles.length}</strong> (${successRate}% sukses)<br>
               ZIP diekstrak: <strong>${zipCount}</strong> | RAR diproses: <strong>${rarCount}</strong>
+              ${retryRound > 1 ? `<br><br><em style="font-size: 13px;">🔄 Dilakukan ${retryRound - 1} putaran pengulangan otomatis</em>` : ''}
             </div>
           </div>
+          ${failedFiles.length > 0 ? `
+            <div style="background-color: #ffebee; color: #c62828; padding: 12px; margin: 8px 0; border-radius: 6px; font-size: 13px; border-left: 4px solid #f44336;">
+              <strong>❌ File yang masih gagal setelah ${maxRetryRounds} kali pengulangan:</strong><br>
+              <div style="margin-top: 8px; text-align: left; max-height: 150px; overflow-y: auto;">
+                ${failedFiles.map(f => `• ${f.name}`).join('<br>')}
+              </div>
+              <div style="margin-top: 8px; font-size: 12px;">
+                <em>Tip: Coba upload file ini secara terpisah atau periksa apakah file rusak</em>
+              </div>
+            </div>
+          ` : ''}
         `;
       }
 
