@@ -4,7 +4,6 @@ import {
   HarmCategory,
 } from "@google/generative-ai";
 import { maybeShowApiKeyBanner } from "./gemini-api-banner";
-import * as XLSX from "xlsx";
 import "./style.css";
 
 // 🔥 FILL THIS OUT FIRST! 🔥
@@ -76,10 +75,6 @@ function markApiKeyAsLimit(apiKey) {
     apiKeyLimitStatus[keyIndex] = true;
     console.log(`⚠️ API Key ${keyIndex + 1} ditandai sebagai limit`);
   }
-}
-
-function areAllApiKeysAtLimit() {
-  return Object.values(apiKeyLimitStatus).every(status => status === true);
 }
 
 function resetAllApiKeyLimits() {
@@ -442,7 +437,7 @@ function initializeApp() {
       output.innerHTML = `
         <div style="background-color: #f0f8ff; padding: 16px; border-radius: 8px; margin: 10px 0;">
           <div style="color: #1976d2; font-weight: bold; margin-bottom: 8px;">
-            🔄 Memproses gambar dengan AI... ${progress}% (${processed}/${total} files)
+            🔄 Memproses gambar (OCR → Gemini)... ${progress}% (${processed}/${total} files)
           </div>
           <div style="font-size: 14px; color: #333; margin-bottom: 4px;">
             ${
@@ -703,7 +698,7 @@ function initializeApp() {
       // Show initial status
       if (output) {
         output.innerHTML =
-          '<div style="color: #1976d2; padding: 16px; background-color: #f0f8ff; border-radius: 8px; margin: 10px 0;">🚀 Memulai proses scanning...</div>';
+          '<div style="color: #1976d2; padding: 16px; background-color: #f0f8ff; border-radius: 8px; margin: 10px 0;">🚀 Memulai proses scanning dengan OCR (gambar → teks → Gemini)...</div>';
       }
 
       // Get files
@@ -796,12 +791,39 @@ function initializeApp() {
 
       await sleep(1500); // Show summary briefly
 
-      console.log("🤖 Menyiapkan Gemini AI...");
+      // Cek apakah Tesseract.js tersedia (dari CDN)
+      const TesseractAvailable = (typeof window !== 'undefined' && window.Tesseract) || (typeof Tesseract !== 'undefined' && Tesseract);
+      if (!TesseractAvailable) {
+        throw new Error(
+          "Tesseract.js tidak dimuat. Pastikan CDN Tesseract.js tersedia di index.html. Refresh halaman jika perlu."
+        );
+      }
+
+      console.log("🤖 Menyiapkan OCR + Gemini AI...");
       console.log(`🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
 
-      const batchSize = 2; // Conservative batch size
+      // 10 gambar per 1 API call (OCR semua → kirim teks ke Gemini)
+      const BATCH_SIZE = 10;
       const totalFiles = allImages.length;
+      const totalBatches = Math.ceil(totalFiles / BATCH_SIZE);
       let processedCount = 0;
+      console.log(
+        `📦 Batch mode: ${BATCH_SIZE} gambar → OCR → ${totalBatches} Gemini API call (teks saja, lebih ringan!)`
+      );
+
+      // Helper: normalisasi teks jadi nomor 628 atau null
+      const normalizePhoneFromText = (text) => {
+        if (!text || typeof text !== "string") return null;
+        const phoneMatch = text.match(
+          /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
+        );
+        if (!phoneMatch) return null;
+        let phone = phoneMatch[1].replace(/\D/g, "");
+        if (phone.startsWith("08")) phone = "628" + phone.slice(2);
+        else if (phone.startsWith("0")) phone = "62" + phone.slice(1);
+        else if (!phone.startsWith("62")) phone = "628" + phone;
+        return phone;
+      };
 
       // Helper function to create model with current API key
       const createModel = () => {
@@ -817,134 +839,188 @@ function initializeApp() {
         });
       };
 
-      // Helper function to process a single file
-      const processSingleFile = async (currentFile, retryAttempt = 0) => {
+      // Helper: OCR gambar → teks (pakai 'eng' saja; 'ind' bisa gagal load di Tesseract.js)
+      const ocrImage = async (file) => {
         try {
-          console.log(`🔍 Processing file: ${currentFile.name}${retryAttempt > 0 ? ` (Retry ${retryAttempt})` : ''}`);
-
-          // Convert to base64
-          const imageBase64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) =>
-              resolve(event.target.result.split(",")[1]);
-            reader.onerror = (error) => reject(error);
-            reader.readAsDataURL(currentFile);
+          console.log(`🔍 OCR: ${file.name}...`);
+          const TesseractOCR = typeof window !== 'undefined' && window.Tesseract ? window.Tesseract : (typeof Tesseract !== 'undefined' ? Tesseract : null);
+          if (!TesseractOCR) throw new Error("Tesseract.js belum dimuat");
+          const { data: { text } } = await TesseractOCR.recognize(file, 'eng', {
+            logger: () => {},
           });
-
-          const contents = {
-            role: "user",
-            parts: [
-              {
-                inline_data: {
-                  mime_type: currentFile.type,
-                  data: imageBase64,
-                },
-              },
-              { text: promptInput.value },
-            ],
-          };
-
-          // Check cache
-          const cacheKey = JSON.stringify(contents);
-          if (cache[cacheKey]) {
-            console.log(`💾 Using cached result for ${currentFile.name}`);
-            return cache[cacheKey];
-          }
-
-          // Make AI request
-          const result = await fetchWithRetryAndTimeout(
-            () => {
-              const model = createModel();
-              return model.generateContentStream({ contents: [contents] });
-            },
-            currentFile,
-            3,
-            3000,
-            25000
-          );
-
-          let aggregatedResult = "";
-          for await (let response of result.stream) {
-            if (response.text) {
-              aggregatedResult += response.text();
-            }
-          }
-
-          // Extract phone number and clean it
-          const phoneMatch = aggregatedResult.match(
-            /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
-          );
-          if (phoneMatch) {
-            let phoneNumber = phoneMatch[1];
-            
-            // Remove all non-digit characters
-            phoneNumber = phoneNumber.replace(/\D/g, "");
-            
-            // Convert to 628 format
-            if (phoneNumber.startsWith("08")) {
-              phoneNumber = "628" + phoneNumber.substring(2);
-            } else if (phoneNumber.startsWith("0")) {
-              phoneNumber = "62" + phoneNumber.substring(1);
-            } else if (!phoneNumber.startsWith("62")) {
-              phoneNumber = "628" + phoneNumber;
-            }
-            
-            aggregatedResult = phoneNumber;
-          }
-
-          console.log(
-            `📞 Found result for ${currentFile.name}:`,
-            aggregatedResult
-          );
-
-          cache[cacheKey] = aggregatedResult;
-          return aggregatedResult;
+          const cleanedText = (text || "").trim();
+          console.log(`✅ OCR selesai: ${file.name} (${cleanedText.length} karakter)`);
+          return cleanedText;
         } catch (error) {
-          console.error(`❌ Error processing ${currentFile.name}:`, error);
+          console.error(`❌ OCR gagal untuk ${file.name}:`, error);
           throw error;
         }
       };
 
-      // Process images in batches
-      for (let i = 0; i < totalFiles; i += batchSize) {
-        const batchFiles = allImages.slice(i, i + batchSize);
-        console.log(
-          `📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
-            totalFiles / batchSize
-          )}`
+      // Proses 1 batch: OCR semua gambar → dapat teks → kirim teks ke Gemini
+      const processBatchOfImages = async (batchFiles, batchIndex, retryAttempt = 0) => {
+        const n = batchFiles.length;
+        const batchLabel = `Batch ${batchIndex + 1} (${n} gambar)${retryAttempt > 0 ? `, Retry ${retryAttempt}` : ""}`;
+        console.log(`🔍 Processing ${batchLabel}: ${batchFiles.map((f) => f.name).join(", ")}`);
+
+        // Step 1: OCR semua gambar dalam batch → dapat array teks
+        const ocrTexts = [];
+        for (let idx = 0; idx < batchFiles.length; idx++) {
+          const file = batchFiles[idx];
+          try {
+            updateProgress(processedCount, totalFiles, `OCR: ${file.name} (${idx + 1}/${n})`);
+            const text = await ocrImage(file);
+            ocrTexts.push(text || "");
+          } catch (error) {
+            console.error(`❌ OCR gagal untuk ${file.name}, menggunakan teks kosong`);
+            ocrTexts.push("");
+          }
+        }
+
+        console.log(`📝 OCR selesai untuk batch ${batchIndex + 1}, mengirim ${n} teks ke Gemini...`);
+
+        // Step 2: Kirim semua teks hasil OCR ke Gemini (bukan gambar!)
+        // Format: teks1, teks2, ..., teksN + prompt
+        // Batasi panjang teks per gambar (hindari limit token Gemini)
+        const MAX_OCR_CHARS = 2000;
+        const combinedTexts = ocrTexts
+          .map((text, idx) => `[Teks dari gambar ${idx + 1}]\n${(text || "").slice(0, MAX_OCR_CHARS)}`)
+          .join("\n\n---\n\n");
+
+        const batchPrompt =
+          promptInput.value.trim() +
+          `\n\n[Instruksi sistem] Saya mengirim ${n} teks hasil OCR dari ${n} gambar. Untuk setiap teks (gambar 1, gambar 2, ...), ekstrak nomor telepon WhatsApp Indonesia. Berikan SATU nomor per baris, urutan sesuai teks (baris 1 = teks 1, baris 2 = teks 2, ...). Hanya nomor per baris, tanpa penjelasan. Jika tidak ada nomor, tulis: TIDAK_DITEMUKAN.\n\n${combinedTexts}`;
+
+        const contents = {
+          role: "user",
+          parts: [{ text: batchPrompt }],
+        };
+
+        const result = await fetchWithRetryAndTimeout(
+          () => {
+            const model = createModel();
+            return model.generateContentStream({ contents: [contents] });
+          },
+          { name: batchLabel },
+          3,
+          3000,
+          60000
         );
 
-        const batchPromises = batchFiles.map(async (currentFile) => {
-          try {
-            updateProgress(processedCount, totalFiles, currentFile.name);
-            const result = await processSingleFile(currentFile);
-            currentResults.push(result);
-            processedCount++;
-            updateProgress(processedCount, totalFiles, currentFile.name);
-          } catch (error) {
-            failedFiles.push(currentFile);
-            processedCount++;
-            updateProgress(processedCount, totalFiles, currentFile.name);
+        let aggregated = "";
+        for await (const chunk of result.stream) {
+          if (chunk.text) aggregated += chunk.text();
+        }
+
+        // Step 3: Parse hasil dari Gemini
+        const lines = aggregated
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const results = [];
+
+        for (let idx = 0; idx < n; idx++) {
+          const raw = lines[idx] || "";
+          const upper = raw.toUpperCase();
+          let value = raw;
+          if (upper === "TIDAK_DITEMUKAN" || upper === "TIDAK DITEMUKAN") {
+            value = "TIDAK_DITEMUKAN";
+          } else {
+            const normalized = normalizePhoneFromText(raw);
+            if (normalized) value = normalized;
           }
-        });
+          results.push(value);
+          console.log(`📞 [${batchLabel}] Gambar ${idx + 1} (${batchFiles[idx].name}): ${value}`);
+        }
 
-        await Promise.all(batchPromises);
+        return results;
+      };
 
-        // Delay between batches
-        if (i + batchSize < totalFiles) {
+      let lastBatchError = "";
+
+      // Fallback: kirim gambar langsung ke Gemini (tanpa OCR) jika OCR+teks gagal
+      const processBatchOfImagesDirect = async (batchFiles, batchIndex) => {
+        const n = batchFiles.length;
+        const parts = [];
+        for (const file of batchFiles) {
+          const imageBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result.split(",")[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          parts.push({ inline_data: { mime_type: file.type, data: imageBase64 } });
+        }
+        const batchPrompt = promptInput.value.trim() +
+          `\n\n[Instruksi] Saya mengirim ${n} gambar. Untuk setiap gambar, ekstrak nomor telepon WA Indonesia. Berikan SATU nomor per baris (baris 1 = gambar 1, ...). Hanya nomor. Jika tidak ada: TIDAK_DITEMUKAN.`;
+        parts.push({ text: batchPrompt });
+        const contents = { role: "user", parts };
+        const result = await fetchWithRetryAndTimeout(
+          () => { const model = createModel(); return model.generateContentStream({ contents: [contents] }); },
+          { name: `Batch ${batchIndex + 1} (gambar langsung)` },
+          3, 3000, 60000
+        );
+        let aggregated = "";
+        for await (const chunk of result.stream) { if (chunk.text) aggregated += chunk.text(); }
+        const lines = aggregated.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+        const results = [];
+        for (let idx = 0; idx < n; idx++) {
+          const raw = lines[idx] || "";
+          const upper = raw.toUpperCase();
+          let value = raw;
+          if (upper === "TIDAK_DITEMUKAN" || upper === "TIDAK DITEMUKAN") value = "TIDAK_DITEMUKAN";
+          else { const n2 = normalizePhoneFromText(raw); if (n2) value = n2; }
+          results.push(value);
+        }
+        return results;
+      };
+
+      // Process images in batches of 10 (1 API call per batch)
+      for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
+        const batchFiles = allImages.slice(i, i + BATCH_SIZE);
+        const batchIndex = Math.floor(i / BATCH_SIZE);
+
+        updateProgress(processedCount, totalFiles, `OCR + Gemini: Batch ${batchIndex + 1}/${totalBatches} (${batchFiles.length} gambar)`);
+
+        try {
+          const batchResults = await processBatchOfImages(batchFiles, batchIndex);
+          for (const r of batchResults) {
+            if (r !== "TIDAK_DITEMUKAN") currentResults.push(r);
+          }
+          processedCount += batchFiles.length;
+          updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1}/${totalBatches} selesai`);
+        } catch (err) {
+          lastBatchError = err?.message || String(err);
+          console.error(`❌ Batch ${batchIndex + 1} gagal (OCR+teks):`, err);
+          updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} gagal, mencoba fallback: gambar → Gemini...`);
+          try {
+            const batchResults = await processBatchOfImagesDirect(batchFiles, batchIndex);
+            for (const r of batchResults) { if (r !== "TIDAK_DITEMUKAN") currentResults.push(r); }
+            processedCount += batchFiles.length;
+            updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} selesai (fallback gambar)`);
+            console.log(`✅ Batch ${batchIndex + 1} berhasil via fallback (gambar → Gemini)`);
+          } catch (err2) {
+            console.error(`❌ Fallback batch ${batchIndex + 1} juga gagal:`, err2);
+            lastBatchError = lastBatchError + " | Fallback: " + (err2?.message || String(err2));
+            for (const f of batchFiles) failedFiles.push(f);
+            processedCount += batchFiles.length;
+            updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} gagal, akan diulang`);
+          }
+        }
+
+        if (i + BATCH_SIZE < totalFiles) {
           console.log("⏸️ Waiting before next batch...");
           await sleep(5000);
         }
       }
 
-      // Retry failed files automatically
-      const maxRetryRounds = 3; // Maximum retry rounds for failed files
+      // Retry failed files automatically (tetap pakai batch 10 gambar / 1 request)
+      const maxRetryRounds = 3;
       let retryRound = 1;
 
       while (failedFiles.length > 0 && retryRound <= maxRetryRounds) {
         console.log(`🔄 Starting retry round ${retryRound}/${maxRetryRounds} for ${failedFiles.length} failed files`);
-        
-        // Show retry status
+
         if (output) {
           output.innerHTML = `
             <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
@@ -968,60 +1044,59 @@ function initializeApp() {
           `;
         }
 
-        // Wait a bit before retrying
         await sleep(5000);
 
         const filesToRetry = [...failedFiles];
-        failedFiles = []; // Reset failed files array
+        failedFiles = [];
         let retryProcessedCount = 0;
 
-        // Process retry files in batches
-        for (let i = 0; i < filesToRetry.length; i += batchSize) {
-          const batchFiles = filesToRetry.slice(i, i + batchSize);
-          console.log(
-            `🔄 Retry batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
-              filesToRetry.length / batchSize
-            )} (Round ${retryRound})`
-          );
+        for (let i = 0; i < filesToRetry.length; i += BATCH_SIZE) {
+          const retryBatch = filesToRetry.slice(i, i + BATCH_SIZE);
+          const retryBatchIndex = Math.floor(i / BATCH_SIZE);
 
-          const batchPromises = batchFiles.map(async (currentFile) => {
-            try {
-              // Update progress for retry
-              if (output) {
-                const progress = Math.round(((retryProcessedCount + 1) / filesToRetry.length) * 100);
-                output.innerHTML = `
-                  <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
-                    <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
-                      🔄 Mengulang file yang gagal (Putaran ${retryRound}/${maxRetryRounds})
-                    </div>
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
-                      Progress: ${retryProcessedCount}/${filesToRetry.length} (${progress}%)
-                    </div>
-                    <div style="font-size: 12px; color: #555;">
-                      Sedang proses: ${currentFile.name}
-                    </div>
-                    <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
-                      <div style="width: ${progress}%; height: 6px; background-color: #ff9800; border-radius: 4px; transition: width 0.3s ease;"></div>
-                    </div>
-                  </div>
-                `;
-              }
+          if (output) {
+            const progress = Math.round(((retryProcessedCount + 1) / filesToRetry.length) * 100);
+            output.innerHTML = `
+              <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+                <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+                  🔄 Mengulang file yang gagal (Putaran ${retryRound}/${maxRetryRounds})
+                </div>
+                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                  Progress: ${retryProcessedCount}/${filesToRetry.length} (${progress}%)
+                </div>
+                <div style="font-size: 12px; color: #555;">
+                  Batch ${retryBatchIndex + 1}: ${retryBatch.length} gambar
+                </div>
+                <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
+                  <div style="width: ${progress}%; height: 6px; background-color: #ff9800; border-radius: 4px; transition: width 0.3s ease;"></div>
+                </div>
+              </div>
+            `;
+          }
 
-              const result = await processSingleFile(currentFile, retryRound);
-              currentResults.push(result);
-              retryProcessedCount++;
-              console.log(`✅ Retry successful for ${currentFile.name}`);
-            } catch (error) {
-              failedFiles.push(currentFile);
-              retryProcessedCount++;
-              console.error(`❌ Retry failed for ${currentFile.name}`);
+          try {
+            const batchResults = await processBatchOfImages(retryBatch, retryBatchIndex, retryRound);
+            for (const r of batchResults) {
+              if (r !== "TIDAK_DITEMUKAN") currentResults.push(r);
             }
-          });
+            retryProcessedCount += retryBatch.length;
+            console.log(`✅ Retry batch ${retryBatchIndex + 1} berhasil (${retryBatch.length} gambar)`);
+          } catch (err) {
+            lastBatchError = err?.message || String(err);
+            try {
+              const batchResults = await processBatchOfImagesDirect(retryBatch, retryBatchIndex);
+              for (const r of batchResults) { if (r !== "TIDAK_DITEMUKAN") currentResults.push(r); }
+              retryProcessedCount += retryBatch.length;
+              console.log(`✅ Retry batch ${retryBatchIndex + 1} berhasil via fallback (gambar→Gemini)`);
+            } catch (err2) {
+              lastBatchError = (lastBatchError || "") + " | Fallback: " + (err2?.message || String(err2));
+              for (const f of retryBatch) failedFiles.push(f);
+              retryProcessedCount += retryBatch.length;
+              console.error(`❌ Retry batch ${retryBatchIndex + 1} gagal`);
+            }
+          }
 
-          await Promise.all(batchPromises);
-
-          // Delay between retry batches
-          if (i + batchSize < filesToRetry.length) {
+          if (i + BATCH_SIZE < filesToRetry.length) {
             console.log("⏸️ Waiting before next retry batch...");
             await sleep(5000);
           }
@@ -1031,7 +1106,6 @@ function initializeApp() {
           console.log(`🎉 All files processed successfully after ${retryRound} retry rounds!`);
           break;
         }
-
         retryRound++;
       }
 
@@ -1069,11 +1143,12 @@ function initializeApp() {
           ${failedFiles.length > 0 ? `
             <div style="background-color: #ffebee; color: #c62828; padding: 12px; margin: 8px 0; border-radius: 6px; font-size: 13px; border-left: 4px solid #f44336;">
               <strong>❌ File yang masih gagal setelah ${maxRetryRounds} kali pengulangan:</strong><br>
+              ${lastBatchError ? `<div style="margin-top: 6px; font-size: 12px; color: #b71c1c; word-break: break-word;">Kemungkinan penyebab: ${lastBatchError}</div>` : ''}
               <div style="margin-top: 8px; text-align: left; max-height: 150px; overflow-y: auto;">
                 ${failedFiles.map(f => `• ${f.name}`).join('<br>')}
               </div>
               <div style="margin-top: 8px; font-size: 12px;">
-                <em>Tip: Coba upload file ini secara terpisah atau periksa apakah file rusak</em>
+                <em>Tip: Coba upload file ini secara terpisah, periksa apakah file rusak, atau pastikan gambar berisi teks yang terbaca (OCR)</em>
               </div>
             </div>
           ` : ''}

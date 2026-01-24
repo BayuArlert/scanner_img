@@ -354,6 +354,18 @@
       </main>
     </div>
 
+    <!-- Tesseract.js untuk OCR (client-side, gratis) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script>
+      // Pastikan Tesseract tersedia sebelum load main.js
+      window.tesseractReady = false;
+      if (typeof Tesseract !== 'undefined') {
+        window.tesseractReady = true;
+        console.log('✅ Tesseract.js loaded');
+      } else {
+        console.warn('⚠️ Tesseract.js belum dimuat');
+      }
+    </script>
     <script type="module" src="/main.js"></script>
   </body>
 </html>
