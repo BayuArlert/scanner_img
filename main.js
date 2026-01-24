@@ -799,6 +799,20 @@ function initializeApp() {
         );
       }
 
+      const TesseractOCR = typeof window !== 'undefined' && window.Tesseract ? window.Tesseract : Tesseract;
+      
+      // Pre-initialize worker untuk memastikan worker files ter-load (opsional, tapi membantu)
+      console.log("🔧 Memuat Tesseract worker...");
+      try {
+        // Coba create worker dulu untuk pre-load
+        const worker = await TesseractOCR.createWorker('eng');
+        await worker.terminate(); // Langsung terminate, kita akan create lagi saat recognize
+        console.log("✅ Tesseract worker siap");
+      } catch (workerError) {
+        console.warn("⚠️ Pre-load worker gagal, akan create saat recognize:", workerError.message);
+        // Tidak throw, biarkan create saat recognize
+      }
+
       console.log("🤖 Menyiapkan OCR + Gemini AI...");
       console.log(`🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
 
@@ -840,14 +854,28 @@ function initializeApp() {
       };
 
       // Helper: OCR gambar → teks (pakai 'eng' saja; 'ind' bisa gagal load di Tesseract.js)
-      const ocrImage = async (file) => {
+      const ocrImage = async (file, onProgress) => {
         try {
           console.log(`🔍 OCR: ${file.name}...`);
-          const TesseractOCR = typeof window !== 'undefined' && window.Tesseract ? window.Tesseract : (typeof Tesseract !== 'undefined' ? Tesseract : null);
+          // TesseractOCR sudah di-define di scope atas
           if (!TesseractOCR) throw new Error("Tesseract.js belum dimuat");
-          const { data: { text } } = await TesseractOCR.recognize(file, 'eng', {
-            logger: () => {},
+          
+          // Tambahkan timeout 60 detik untuk OCR
+          const ocrPromise = TesseractOCR.recognize(file, 'eng', {
+            logger: (m) => {
+              if (m.status === 'recognizing text' && m.progress) {
+                const progress = Math.round(m.progress * 100);
+                console.log(`📊 OCR progress ${file.name}: ${progress}%`);
+                if (onProgress) onProgress(progress);
+              }
+            },
           });
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OCR timeout setelah 60 detik')), 60000)
+          );
+          
+          const { data: { text } } = await Promise.race([ocrPromise, timeoutPromise]);
           const cleanedText = (text || "").trim();
           console.log(`✅ OCR selesai: ${file.name} (${cleanedText.length} karakter)`);
           return cleanedText;
@@ -869,10 +897,41 @@ function initializeApp() {
           const file = batchFiles[idx];
           try {
             updateProgress(processedCount, totalFiles, `OCR: ${file.name} (${idx + 1}/${n})`);
-            const text = await ocrImage(file);
+            const text = await ocrImage(file, (progress) => {
+              // Update progress dengan persentase OCR
+              if (output) {
+                const overallProgress = Math.round((processedCount / totalFiles) * 100);
+                output.innerHTML = `
+                  <div style="background-color: #f0f8ff; padding: 16px; border-radius: 8px; margin: 10px 0;">
+                    <div style="color: #1976d2; font-weight: bold; margin-bottom: 8px;">
+                      🔄 Memproses gambar (OCR → Gemini)... ${overallProgress}% (${processedCount}/${totalFiles} files)
+                    </div>
+                    <div style="font-size: 14px; color: #333; margin-bottom: 4px;">
+                      OCR: ${file.name} - ${progress}%
+                    </div>
+                    <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
+                      <div style="width: ${progress}%; height: 6px; background-color: #1976d2; border-radius: 4px; transition: width 0.3s ease;"></div>
+                    </div>
+                  </div>
+                `;
+              }
+            });
             ocrTexts.push(text || "");
           } catch (error) {
-            console.error(`❌ OCR gagal untuk ${file.name}, menggunakan teks kosong`);
+            const errorMsg = error?.message || String(error);
+            console.error(`❌ OCR gagal untuk ${file.name}:`, errorMsg);
+            if (output && errorMsg.includes('timeout')) {
+              output.innerHTML = `
+                <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+                  <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+                    ⏰ OCR Timeout untuk ${file.name}
+                  </div>
+                  <div style="font-size: 14px; color: #666;">
+                    OCR memakan waktu terlalu lama. Menggunakan teks kosong dan akan coba fallback ke gambar langsung ke Gemini.
+                  </div>
+                </div>
+              `;
+            }
             ocrTexts.push("");
           }
         }
