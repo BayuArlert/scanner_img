@@ -22,8 +22,12 @@ let API_KEYS = [
   import.meta.env.VITE_GEMINI_API_KEY_10,
 ].filter((key) => key); // Filter out any undefined or empty keys
 
+// Model yang digunakan: gemma-3-27b-it (multimodal, limit gratis besar & refresh cepat)
+const MODEL_NAME = "gemma-3-27b-it";
+
 console.log("🚀 Starting Phone Scanner App...");
 console.log("API Keys found:", API_KEYS.length);
+console.log("Model:", MODEL_NAME);
 
 if (API_KEYS.length === 0) {
   console.error("❌ No API keys found in environment variables");
@@ -53,9 +57,7 @@ function getCurrentApiKey() {
 }
 
 function getNextAvailableApiKey() {
-  // Cari API key berikutnya yang belum limit, mulai dari index sekarang
   const startIndex = currentApiKeyIndex;
-  
   for (let i = 0; i < API_KEYS.length; i++) {
     const checkIndex = (startIndex + i) % API_KEYS.length;
     if (!apiKeyLimitStatus[checkIndex]) {
@@ -64,8 +66,6 @@ function getNextAvailableApiKey() {
       return API_KEYS[currentApiKeyIndex];
     }
   }
-  
-  // Jika semua API key limit, return null
   return null;
 }
 
@@ -85,14 +85,11 @@ function resetAllApiKeyLimits() {
 }
 
 function rotateApiKey() {
-  // Tandai API key saat ini sebagai limit
   markApiKeyAsLimit(API_KEYS[currentApiKeyIndex]);
-  
-  // Cari API key berikutnya yang available
   return getNextAvailableApiKey();
 }
 
-// Helper functions - define these globally so they're available everywhere
+// Helper functions
 function getMimeTypeByExtension(filename) {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
@@ -130,12 +127,11 @@ function isZipFile(file) {
   return name.endsWith(".zip") || file.type === "application/zip";
 }
 
-// Improved ZIP extraction using JSZip
+// ZIP extraction using JSZip
 async function extractZipFile(zipFile, output) {
   try {
     console.log(`📦 Starting ZIP extraction: ${zipFile.name}`);
 
-    // Show extraction status
     if (output) {
       output.innerHTML = `
         <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
@@ -158,7 +154,6 @@ async function extractZipFile(zipFile, output) {
       `;
     }
 
-    // Load JSZip from CDN if not available
     if (!window.JSZip) {
       console.log("📚 Loading JSZip...");
       await new Promise((resolve, reject) => {
@@ -175,7 +170,6 @@ async function extractZipFile(zipFile, output) {
     const JSZip = window.JSZip;
     const zip = new JSZip();
 
-    // Show reading status
     if (output) {
       output.innerHTML = `
         <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
@@ -184,9 +178,6 @@ async function extractZipFile(zipFile, output) {
           </div>
           <div style="font-size: 14px; color: #666;">
             Menganalisis isi file...
-          </div>
-          <div style="margin-top: 8px;">
-            <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #ff9800; border-radius: 50%; animation: spin 1s linear infinite;"></div>
           </div>
         </div>
       `;
@@ -198,11 +189,8 @@ async function extractZipFile(zipFile, output) {
     const extractedImages = [];
     const imageFiles = [];
 
-    // Find all image files first
     loadedZip.forEach((relativePath, file) => {
       const name = relativePath.toLowerCase();
-
-      // Check if it's an image file and not a directory
       if (
         !file.dir &&
         (name.endsWith(".jpg") ||
@@ -225,21 +213,15 @@ async function extractZipFile(zipFile, output) {
             <div style="color: #c62828; font-weight: bold; margin-bottom: 8px;">
               ⚠️ Tidak ada gambar ditemukan dalam ZIP: ${zipFile.name}
             </div>
-            <div style="font-size: 14px; color: #666;">
-              ZIP tidak mengandung gambar dengan format yang didukung
-            </div>
           </div>
         `;
       }
       return [];
     }
 
-    // Extract image files one by one with progress
     for (let i = 0; i < imageFiles.length; i++) {
       const { path, file } = imageFiles[i];
-
       try {
-        // Show extraction progress
         if (output) {
           const progress = Math.round(((i + 1) / imageFiles.length) * 100);
           output.innerHTML = `
@@ -249,9 +231,6 @@ async function extractZipFile(zipFile, output) {
               </div>
               <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
                 Progress: ${i + 1}/${imageFiles.length} files (${progress}%)
-              </div>
-              <div style="font-size: 12px; color: #555;">
-                Sedang ekstrak: ${path}
               </div>
               <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
                 <div style="width: ${progress}%; height: 6px; background-color: #4caf50; border-radius: 4px; transition: width 0.3s ease;"></div>
@@ -275,11 +254,8 @@ async function extractZipFile(zipFile, output) {
       }
     }
 
-    console.log(
-      `🎉 ZIP extraction completed: ${extractedImages.length} images extracted`
-    );
+    console.log(`🎉 ZIP extraction completed: ${extractedImages.length} images extracted`);
 
-    // Show completion
     if (output) {
       output.innerHTML = `
         <div style="background-color: #e8f5e8; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #4caf50;">
@@ -287,7 +263,7 @@ async function extractZipFile(zipFile, output) {
             ✅ ZIP ekstraksi selesai: ${zipFile.name}
           </div>
           <div style="font-size: 14px; color: #666;">
-            Berhasil mengekstrak ${extractedImages.length} gambar dari ${imageFiles.length} file gambar
+            Berhasil mengekstrak ${extractedImages.length} gambar
           </div>
         </div>
       `;
@@ -312,44 +288,21 @@ async function extractZipFile(zipFile, output) {
   }
 }
 
-// Simplified RAR extraction - focus on ZIP for now since it's more reliable
+// RAR extraction (simplified)
 async function extractRarFile(rarFile, output) {
-  try {
-    console.log(`📦 Starting RAR extraction: ${rarFile.name}`);
-
-    // Show status
-    if (output) {
-      output.innerHTML = `
-        <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
-          <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
-            📦 Mencoba mengekstrak RAR: ${rarFile.name}
-          </div>
-          <div style="font-size: 14px; color: #666;">
-            Memuat library ekstraksi...
-          </div>
+  if (output) {
+    output.innerHTML = `
+      <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
+        <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
+          ⚠️ RAR extraction masih dalam pengembangan
         </div>
-      `;
-    }
-
-    // For now, show message that RAR extraction is experimental
-    if (output) {
-      output.innerHTML = `
-        <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
-          <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
-            ⚠️ RAR extraction masih dalam pengembangan
-          </div>
-          <div style="font-size: 14px; color: #666;">
-            Untuk hasil terbaik, gunakan file ZIP atau ekstrak RAR secara manual lalu upload gambar langsung.
-          </div>
+        <div style="font-size: 14px; color: #666;">
+          Untuk hasil terbaik, gunakan file ZIP atau ekstrak RAR secara manual lalu upload gambar langsung.
         </div>
-      `;
-    }
-
-    return []; // Return empty for now
-  } catch (error) {
-    console.error("💥 RAR extraction failed:", error);
-    return [];
+      </div>
+    `;
   }
+  return [];
 }
 
 // Wait for DOM to be loaded
@@ -361,7 +314,6 @@ document.addEventListener("DOMContentLoaded", function () {
 function initializeApp() {
   console.log("🔧 Initializing app...");
 
-  // Get DOM elements
   const form = document.querySelector("form");
   const promptInput = document.querySelector('input[name="prompt"]');
   const output = document.querySelector(".output");
@@ -371,60 +323,33 @@ function initializeApp() {
   const imageFileInfo = document.getElementById("imageFileInfo");
   const archiveFileInfo = document.getElementById("archiveFileInfo");
 
-  // Check if elements exist with detailed logging
   console.log("🔍 Checking DOM elements:");
   console.log("Form:", form ? "✅" : "❌");
   console.log("Prompt input:", promptInput ? "✅" : "❌");
   console.log("Output:", output ? "✅" : "❌");
   console.log("Image input:", imageInput ? "✅" : "❌");
-  console.log("Archive input:", archiveInput ? "✅" : "❌");
-  console.log("Download button:", downloadButton ? "✅" : "❌");
-  console.log("Image file info:", imageFileInfo ? "✅" : "❌");
-  console.log("Archive file info:", archiveFileInfo ? "✅" : "❌");
 
-  if (!form) {
-    console.error(
-      "❌ Form not found! Make sure your HTML has a <form> element"
-    );
-    return;
-  }
-  if (!promptInput) {
-    console.error(
-      '❌ Prompt input not found! Make sure you have input[name="prompt"]'
-    );
-    return;
-  }
-  if (!output) {
-    console.error(
-      '❌ Output element not found! Make sure you have element with class "output"'
-    );
-    return;
-  }
-  if (!imageInput) {
-    console.error(
-      '❌ Image input not found! Make sure you have input with id "imageInput"'
-    );
+  if (!form || !promptInput || !output || !imageInput) {
+    console.error("❌ Essential DOM elements not found!");
     return;
   }
 
   console.log("✅ All essential DOM elements found!");
 
-  // App state variables
+  // App state
   let currentResults = [];
   let isProcessing = false;
-  let cache = {};
   let failedFiles = [];
   let apiLimitCount = 0;
   let consecutiveApiLimitErrors = 0;
 
-  // Set default prompt if empty
+  // Set default prompt
   if (promptInput && !promptInput.value.trim()) {
     promptInput.value =
       "Extract phone number from this image, give me only the number without any explanation";
     console.log("📝 Set default prompt value");
   }
 
-  // Helper functions
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -432,24 +357,17 @@ function initializeApp() {
   function updateProgress(processed, total, currentFileName = "") {
     const progress = Math.round((processed / total) * 100);
     const remaining = total - processed;
-
     if (output) {
       output.innerHTML = `
         <div style="background-color: #f0f8ff; padding: 16px; border-radius: 8px; margin: 10px 0;">
           <div style="color: #1976d2; font-weight: bold; margin-bottom: 8px;">
-            🔄 Memproses gambar (OCR → Gemini)... ${progress}% (${processed}/${total} files)
+            🔄 Memproses gambar langsung ke AI... ${progress}% (${processed}/${total} files)
           </div>
           <div style="font-size: 14px; color: #333; margin-bottom: 4px;">
-            ${
-              currentFileName
-                ? `Sedang memproses: ${currentFileName}`
-                : "Menyiapkan proses..."
-            }
+            ${currentFileName ? `Sedang memproses: ${currentFileName}` : "Menyiapkan proses..."}
           </div>
           <div style="font-size: 12px; color: #666;">
-            Sisa: ${remaining} gambar | API Key ${
-        currentApiKeyIndex + 1
-      } | Hasil: ${currentResults.length} nomor ditemukan
+            Sisa: ${remaining} gambar | API Key ${currentApiKeyIndex + 1}/${API_KEYS.length} | Model: ${MODEL_NAME} | Hasil: ${currentResults.length} nomor ditemukan
           </div>
           <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
             <div style="width: ${progress}%; height: 6px; background-color: #1976d2; border-radius: 4px; transition: width 0.3s ease;"></div>
@@ -461,27 +379,22 @@ function initializeApp() {
 
   function updateFileInfo(fileInput, infoElement, fileType) {
     if (!fileInput || !infoElement) return;
-
     const files = Array.from(fileInput.files);
     if (files.length === 0) {
       infoElement.innerHTML = `<span class="empty">Belum ada file ${fileType} yang dipilih</span>`;
       return;
     }
-
-    const maxDisplayFiles = 5; // Maksimal file yang ditampilkan
+    const maxDisplayFiles = 5;
     const displayFiles = files.slice(0, maxDisplayFiles);
     const remainingCount = files.length - maxDisplayFiles;
-
     const fileList = displayFiles
       .map((file) => {
         const size = (file.size / 1024 / 1024).toFixed(2);
         return `• ${file.name} (${size} MB)`;
       })
       .join("<br>");
-
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
-
     infoElement.innerHTML = `
       <strong>${files.length} file ${fileType} dipilih (${totalSizeMB} MB):</strong><br>
       ${fileList}
@@ -491,45 +404,23 @@ function initializeApp() {
 
   function setupDownloadButton() {
     if (!downloadButton) return;
-
     downloadButton.onclick = async () => {
       console.log("📥 Downloading results...");
-      
-      // Clean and format phone numbers to 628 format only
       const formattedResults = currentResults
         .map((nomor) => {
-          // Remove all non-digit characters
           const cleanNumber = nomor.replace(/\D/g, "");
-          
-          // Convert to 628 format if it starts with 08
-          if (cleanNumber.startsWith("08")) {
-            return "628" + cleanNumber.substring(2);
-          }
-          
-          // If it already starts with 62, keep as is
-          if (cleanNumber.startsWith("62")) {
-            return cleanNumber;
-          }
-          
-          // If it starts with 0, convert to 62
-          if (cleanNumber.startsWith("0")) {
-            return "62" + cleanNumber.substring(1);
-          }
-          
-          // If it doesn't start with 62 or 0, assume it needs 628 prefix
+          if (cleanNumber.startsWith("08")) return "628" + cleanNumber.substring(2);
+          if (cleanNumber.startsWith("62")) return cleanNumber;
+          if (cleanNumber.startsWith("0")) return "62" + cleanNumber.substring(1);
           return "628" + cleanNumber;
         })
         .filter((nomor) => {
-          // Only keep valid phone numbers (10-13 digits after 628)
           return nomor.startsWith("628") && nomor.length >= 11 && nomor.length <= 14;
         });
 
-      // Create a simple text file with one phone number per line
       const textContent = formattedResults.join('\n');
       const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
-      
-      // Create download link
       const a = document.createElement('a');
       a.href = url;
       a.download = 'nomor_telepon.txt';
@@ -537,7 +428,6 @@ function initializeApp() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
       console.log(`📥 Downloaded ${formattedResults.length} phone numbers`);
     };
   }
@@ -566,25 +456,17 @@ function initializeApp() {
       try {
         const startTime = Date.now();
         apiKeyUsageCount[currentKey]++;
-
-        console.log(
-          `🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length} untuk ${currentFile.name}`
-        );
+        console.log(`🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length} untuk ${currentFile.name}`);
 
         const result = await fetchWithTimeout(requestFunc, timeout);
         const endTime = Date.now();
-        console.log(
-          `⏱️ Response time untuk ${currentFile.name}: ${endTime - startTime} ms`
-        );
+        console.log(`⏱️ Response time untuk ${currentFile.name}: ${endTime - startTime} ms`);
         consecutiveApiLimitErrors = 0;
         return result;
       } catch (error) {
         lastError = error;
         retryCount++;
-        console.warn(
-          `⚠️ Percobaan ${retryCount} gagal untuk ${currentFile.name}:`,
-          error.message
-        );
+        console.warn(`⚠️ Percobaan ${retryCount} gagal untuk ${currentFile.name}:`, error.message);
 
         const isApiLimitError =
           error.message.includes("quota") ||
@@ -596,17 +478,12 @@ function initializeApp() {
           apiLimitCount++;
           consecutiveApiLimitErrors++;
           apiKeyErrors[currentKey]++;
-
           console.log(`⚠️ API Key ${currentApiKeyIndex + 1} terkena limit!`);
-          
-          // Coba rotate ke API key berikutnya
+
           const nextKey = rotateApiKey();
-          
           if (nextKey === null) {
-            // Semua API key sudah limit, tunggu 30 detik
             const waitTime = 30000;
             console.log(`⏰ Semua API Key limit! Menunggu ${waitTime / 1000} detik...`);
-            
             if (output) {
               output.innerHTML = `
                 <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
@@ -615,44 +492,126 @@ function initializeApp() {
                   </div>
                   <div style="font-size: 14px; color: #666;">
                     Menunggu ${waitTime / 1000} detik sebelum mencoba lagi...<br>
-                    API Keys yang digunakan: ${API_KEYS.length}<br>
+                    Model: ${MODEL_NAME}<br>
                     File: ${currentFile.name}
-                  </div>
-                  <div style="margin-top: 8px;">
-                    <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #ff9800; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                   </div>
                 </div>
               `;
             }
-            
             await sleep(waitTime);
-            
-            // Reset semua status limit
             resetAllApiKeyLimits();
-            currentApiKeyIndex = 0; // Mulai lagi dari API key pertama
+            currentApiKeyIndex = 0;
             currentKey = getCurrentApiKey();
-            
-            console.log(`✅ Melanjutkan dengan API Key ${currentApiKeyIndex + 1}`);
           } else {
-            // Berhasil pindah ke API key berikutnya
             currentKey = nextKey;
             console.log(`🔄 Beralih ke API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
-            
-            // Tunggu sebentar sebelum retry dengan API key baru
             await sleep(2000);
           }
         } else {
-          // Error bukan karena limit, tunggu dengan backoff
           const backoffDelay = delay * Math.pow(2, retryCount - 1);
           console.log(`🔄 Retry dalam ${backoffDelay} ms...`);
           await sleep(backoffDelay);
         }
       }
     }
-    throw new Error(
-      `Gagal setelah ${maxRetries} percobaan. Error terakhir: ${lastError.message}`
-    );
+    throw new Error(`Gagal setelah ${maxRetries} percobaan. Error terakhir: ${lastError.message}`);
   }
+
+  // Helper: create Gemma model with current API key
+  const createModel = () => {
+    const genAI = new GoogleGenerativeAI(getCurrentApiKey());
+    return genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+      ],
+    });
+  };
+
+  // Helper: normalisasi nomor telepon ke format 628
+  const normalizePhoneFromText = (text) => {
+    if (!text || typeof text !== "string") return null;
+    const phoneMatch = text.match(/(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/);
+    if (!phoneMatch) return null;
+    let phone = phoneMatch[1].replace(/\D/g, "");
+    if (phone.startsWith("08")) phone = "628" + phone.slice(2);
+    else if (phone.startsWith("0")) phone = "62" + phone.slice(1);
+    else if (!phone.startsWith("62")) phone = "628" + phone;
+    return phone;
+  };
+
+  // MAIN: Kirim gambar langsung ke Gemma (tanpa OCR)
+  const processBatchOfImages = async (batchFiles, batchIndex, retryAttempt = 0) => {
+    const n = batchFiles.length;
+    const batchLabel = `Batch ${batchIndex + 1} (${n} gambar)${retryAttempt > 0 ? `, Retry ${retryAttempt}` : ""}`;
+    console.log(`🖼️ Mengirim gambar langsung ke ${MODEL_NAME}: ${batchFiles.map((f) => f.name).join(", ")}`);
+
+    // Konversi semua gambar ke base64
+    const parts = [];
+    for (const file of batchFiles) {
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      // Tentukan mime type
+      const mimeType = file.type || getMimeTypeByExtension(file.name);
+      parts.push({ inline_data: { mime_type: mimeType, data: imageBase64 } });
+    }
+
+    // Buat prompt batch
+    const batchPrompt =
+      promptInput.value.trim() +
+      `\n\n[Instruksi sistem] Saya mengirim ${n} gambar. Untuk setiap gambar (gambar 1, gambar 2, ...), ekstrak nomor telepon WhatsApp Indonesia. Berikan SATU nomor per baris, urutan sesuai gambar (baris 1 = gambar 1, baris 2 = gambar 2, ...). Hanya nomor per baris, tanpa penjelasan. Jika tidak ada nomor, tulis: TIDAK_DITEMUKAN.`;
+
+    parts.push({ text: batchPrompt });
+
+    const contents = { role: "user", parts };
+
+    const result = await fetchWithRetryAndTimeout(
+      () => {
+        const model = createModel();
+        return model.generateContentStream({ contents: [contents] });
+      },
+      { name: batchLabel },
+      3,
+      3000,
+      60000
+    );
+
+    let aggregated = "";
+    for await (const chunk of result.stream) {
+      if (chunk.text) aggregated += chunk.text();
+    }
+
+    // Parse hasil dari model
+    const lines = aggregated
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const results = [];
+
+    for (let idx = 0; idx < n; idx++) {
+      const raw = lines[idx] || "";
+      const upper = raw.toUpperCase();
+      let value = raw;
+      if (upper === "TIDAK_DITEMUKAN" || upper === "TIDAK DITEMUKAN") {
+        value = "TIDAK_DITEMUKAN";
+      } else {
+        const normalized = normalizePhoneFromText(raw);
+        if (normalized) value = normalized;
+      }
+      results.push(value);
+      console.log(`📞 [${batchLabel}] Gambar ${idx + 1} (${batchFiles[idx].name}): ${value}`);
+    }
+
+    return results;
+  };
 
   // MAIN FORM SUBMISSION HANDLER
   console.log("📝 Adding form submission handler...");
@@ -669,15 +628,12 @@ function initializeApp() {
 
     console.log("▶️ Starting processing...");
 
-    // Get submit button and disable it
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) {
       submitButton.disabled = true;
       submitButton.textContent = "⏳ Memproses...";
-      console.log("🔒 Submit button disabled");
     }
 
-    // Reset states
     isProcessing = true;
     currentResults = [];
     failedFiles = [];
@@ -689,19 +645,20 @@ function initializeApp() {
     API_KEYS.forEach((key, index) => {
       apiKeyUsageCount[key] = 0;
       apiKeyErrors[key] = 0;
-      apiKeyLimitStatus[index] = false; // Reset status limit
+      apiKeyLimitStatus[index] = false;
     });
-    currentApiKeyIndex = 0; // Mulai dari API key pertama
+    currentApiKeyIndex = 0;
     console.log("🔄 Status API key direset, mulai dari API Key 1");
 
     try {
-      // Show initial status
       if (output) {
-        output.innerHTML =
-          '<div style="color: #1976d2; padding: 16px; background-color: #f0f8ff; border-radius: 8px; margin: 10px 0;">🚀 Memulai proses scanning dengan OCR (gambar → teks → Gemini)...</div>';
+        output.innerHTML = `
+          <div style="color: #1976d2; padding: 16px; background-color: #f0f8ff; border-radius: 8px; margin: 10px 0;">
+            🚀 Memulai proses scanning gambar langsung ke ${MODEL_NAME}...
+          </div>
+        `;
       }
 
-      // Get files
       const imageFiles = Array.from(imageInput?.files || []);
       const archiveFiles = Array.from(archiveInput?.files || []);
       const totalInputFiles = imageFiles.length + archiveFiles.length;
@@ -711,12 +668,9 @@ function initializeApp() {
       console.log("📦 Archive files:", archiveFiles.length);
 
       if (totalInputFiles === 0) {
-        throw new Error(
-          "Tidak ada file yang dipilih. Silakan pilih gambar atau file ZIP terlebih dahulu."
-        );
+        throw new Error("Tidak ada file yang dipilih. Silakan pilih gambar atau file ZIP terlebih dahulu.");
       }
 
-      // Show file reading status
       if (output) {
         output.innerHTML = `
           <div style="background-color: #e3f2fd; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #2196f3;">
@@ -730,13 +684,12 @@ function initializeApp() {
         `;
       }
 
-      // Process all files
       const allImages = [];
       let rarCount = 0;
       let zipCount = 0;
       let imageCount = 0;
 
-      // Add direct image files
+      // Tambahkan gambar langsung
       for (const file of imageFiles) {
         if (isImageFile(file)) {
           allImages.push(file);
@@ -745,30 +698,20 @@ function initializeApp() {
         }
       }
 
-      // Extract archive files
+      // Ekstrak file arsip
       for (const file of archiveFiles) {
         if (isZipFile(file)) {
           zipCount++;
           console.log(`📦 Processing ZIP file: ${file.name}`);
-
           const extractedImages = await extractZipFile(file, output);
           allImages.push(...extractedImages);
-          console.log(
-            `📦 ZIP ${file.name}: extracted ${extractedImages.length} images`
-          );
         } else if (isRarFile(file)) {
           rarCount++;
-          console.log(`📦 Processing RAR file: ${file.name}`);
-
           const extractedImages = await extractRarFile(file, output);
           allImages.push(...extractedImages);
-          console.log(
-            `📦 RAR ${file.name}: extracted ${extractedImages.length} images`
-          );
         }
       }
 
-      // Show summary
       if (output) {
         output.innerHTML = `
           <div style="background-color: #e8f5e8; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #4caf50;">
@@ -776,270 +719,33 @@ function initializeApp() {
             <div style="font-size: 14px; color: #333; line-height: 1.6;">
               • ${zipCount} file ZIP diproses<br>
               • ${rarCount} file RAR diproses<br>
-              • ${imageCount} gambar langsung diproses<br>
-              • <strong>Total ${allImages.length} gambar siap diproses</strong>
+              • ${imageCount} gambar langsung<br>
+              • <strong>Total ${allImages.length} gambar siap dikirim ke ${MODEL_NAME}</strong>
             </div>
           </div>
         `;
       }
 
       if (allImages.length === 0) {
-        throw new Error(
-          "Tidak ada gambar yang ditemukan. Pastikan file yang dipilih berisi gambar dengan format JPG, PNG, WEBP, atau GIF."
-        );
+        throw new Error("Tidak ada gambar yang ditemukan. Pastikan file yang dipilih berisi gambar dengan format JPG, PNG, WEBP, atau GIF.");
       }
 
-      await sleep(1500); // Show summary briefly
+      await sleep(1000);
 
-      // Cek apakah Tesseract.js tersedia (dari CDN)
-      const TesseractAvailable = (typeof window !== 'undefined' && window.Tesseract) || (typeof Tesseract !== 'undefined' && Tesseract);
-      if (!TesseractAvailable) {
-        throw new Error(
-          "Tesseract.js tidak dimuat. Pastikan CDN Tesseract.js tersedia di index.html. Refresh halaman jika perlu."
-        );
-      }
-
-      const TesseractOCR = typeof window !== 'undefined' && window.Tesseract ? window.Tesseract : Tesseract;
-      
-      // Pre-initialize worker untuk memastikan worker files ter-load (opsional, tapi membantu)
-      console.log("🔧 Memuat Tesseract worker...");
-      try {
-        // Coba create worker dulu untuk pre-load
-        const worker = await TesseractOCR.createWorker('eng');
-        await worker.terminate(); // Langsung terminate, kita akan create lagi saat recognize
-        console.log("✅ Tesseract worker siap");
-      } catch (workerError) {
-        console.warn("⚠️ Pre-load worker gagal, akan create saat recognize:", workerError.message);
-        // Tidak throw, biarkan create saat recognize
-      }
-
-      console.log("🤖 Menyiapkan OCR + Gemini AI...");
-      console.log(`🔑 Menggunakan API Key ${currentApiKeyIndex + 1}/${API_KEYS.length}`);
-
-      // 10 gambar per 1 API call (OCR semua → kirim teks ke Gemini)
-      const BATCH_SIZE = 10;
+      // Batch size: 5 gambar per request (optimal untuk model multimodal + hemat token)
+      const BATCH_SIZE = 5;
       const totalFiles = allImages.length;
       const totalBatches = Math.ceil(totalFiles / BATCH_SIZE);
       let processedCount = 0;
-      console.log(
-        `📦 Batch mode: ${BATCH_SIZE} gambar → OCR → ${totalBatches} Gemini API call (teks saja, lebih ringan!)`
-      );
-
-      // Helper: normalisasi teks jadi nomor 628 atau null
-      const normalizePhoneFromText = (text) => {
-        if (!text || typeof text !== "string") return null;
-        const phoneMatch = text.match(
-          /(?:^|\D)((?:62|0)8\d{8,11})(?:\D|$)/
-        );
-        if (!phoneMatch) return null;
-        let phone = phoneMatch[1].replace(/\D/g, "");
-        if (phone.startsWith("08")) phone = "628" + phone.slice(2);
-        else if (phone.startsWith("0")) phone = "62" + phone.slice(1);
-        else if (!phone.startsWith("62")) phone = "628" + phone;
-        return phone;
-      };
-
-      // Helper function to create model with current API key
-      const createModel = () => {
-        const genAI = new GoogleGenerativeAI(getCurrentApiKey());
-        return genAI.getGenerativeModel({
-          model: "gemini-2.5-flash",
-          safetySettings: [
-            {
-              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-              threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            },
-          ],
-        });
-      };
-
-      // Helper: OCR gambar → teks (pakai 'eng' saja; 'ind' bisa gagal load di Tesseract.js)
-      const ocrImage = async (file, onProgress) => {
-        try {
-          console.log(`🔍 OCR: ${file.name}...`);
-          // TesseractOCR sudah di-define di scope atas
-          if (!TesseractOCR) throw new Error("Tesseract.js belum dimuat");
-          
-          // Tambahkan timeout 60 detik untuk OCR
-          const ocrPromise = TesseractOCR.recognize(file, 'eng', {
-            logger: (m) => {
-              if (m.status === 'recognizing text' && m.progress) {
-                const progress = Math.round(m.progress * 100);
-                console.log(`📊 OCR progress ${file.name}: ${progress}%`);
-                if (onProgress) onProgress(progress);
-              }
-            },
-          });
-          
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('OCR timeout setelah 60 detik')), 60000)
-          );
-          
-          const { data: { text } } = await Promise.race([ocrPromise, timeoutPromise]);
-          const cleanedText = (text || "").trim();
-          console.log(`✅ OCR selesai: ${file.name} (${cleanedText.length} karakter)`);
-          return cleanedText;
-        } catch (error) {
-          console.error(`❌ OCR gagal untuk ${file.name}:`, error);
-          throw error;
-        }
-      };
-
-      // Proses 1 batch: OCR semua gambar → dapat teks → kirim teks ke Gemini
-      const processBatchOfImages = async (batchFiles, batchIndex, retryAttempt = 0) => {
-        const n = batchFiles.length;
-        const batchLabel = `Batch ${batchIndex + 1} (${n} gambar)${retryAttempt > 0 ? `, Retry ${retryAttempt}` : ""}`;
-        console.log(`🔍 Processing ${batchLabel}: ${batchFiles.map((f) => f.name).join(", ")}`);
-
-        // Step 1: OCR semua gambar dalam batch → dapat array teks
-        const ocrTexts = [];
-        for (let idx = 0; idx < batchFiles.length; idx++) {
-          const file = batchFiles[idx];
-          try {
-            updateProgress(processedCount, totalFiles, `OCR: ${file.name} (${idx + 1}/${n})`);
-            const text = await ocrImage(file, (progress) => {
-              // Update progress dengan persentase OCR
-              if (output) {
-                const overallProgress = Math.round((processedCount / totalFiles) * 100);
-                output.innerHTML = `
-                  <div style="background-color: #f0f8ff; padding: 16px; border-radius: 8px; margin: 10px 0;">
-                    <div style="color: #1976d2; font-weight: bold; margin-bottom: 8px;">
-                      🔄 Memproses gambar (OCR → Gemini)... ${overallProgress}% (${processedCount}/${totalFiles} files)
-                    </div>
-                    <div style="font-size: 14px; color: #333; margin-bottom: 4px;">
-                      OCR: ${file.name} - ${progress}%
-                    </div>
-                    <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
-                      <div style="width: ${progress}%; height: 6px; background-color: #1976d2; border-radius: 4px; transition: width 0.3s ease;"></div>
-                    </div>
-                  </div>
-                `;
-              }
-            });
-            ocrTexts.push(text || "");
-          } catch (error) {
-            const errorMsg = error?.message || String(error);
-            console.error(`❌ OCR gagal untuk ${file.name}:`, errorMsg);
-            if (output && errorMsg.includes('timeout')) {
-              output.innerHTML = `
-                <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
-                  <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
-                    ⏰ OCR Timeout untuk ${file.name}
-                  </div>
-                  <div style="font-size: 14px; color: #666;">
-                    OCR memakan waktu terlalu lama. Menggunakan teks kosong dan akan coba fallback ke gambar langsung ke Gemini.
-                  </div>
-                </div>
-              `;
-            }
-            ocrTexts.push("");
-          }
-        }
-
-        console.log(`📝 OCR selesai untuk batch ${batchIndex + 1}, mengirim ${n} teks ke Gemini...`);
-
-        // Step 2: Kirim semua teks hasil OCR ke Gemini (bukan gambar!)
-        // Format: teks1, teks2, ..., teksN + prompt
-        // Batasi panjang teks per gambar (hindari limit token Gemini)
-        const MAX_OCR_CHARS = 2000;
-        const combinedTexts = ocrTexts
-          .map((text, idx) => `[Teks dari gambar ${idx + 1}]\n${(text || "").slice(0, MAX_OCR_CHARS)}`)
-          .join("\n\n---\n\n");
-
-        const batchPrompt =
-          promptInput.value.trim() +
-          `\n\n[Instruksi sistem] Saya mengirim ${n} teks hasil OCR dari ${n} gambar. Untuk setiap teks (gambar 1, gambar 2, ...), ekstrak nomor telepon WhatsApp Indonesia. Berikan SATU nomor per baris, urutan sesuai teks (baris 1 = teks 1, baris 2 = teks 2, ...). Hanya nomor per baris, tanpa penjelasan. Jika tidak ada nomor, tulis: TIDAK_DITEMUKAN.\n\n${combinedTexts}`;
-
-        const contents = {
-          role: "user",
-          parts: [{ text: batchPrompt }],
-        };
-
-        const result = await fetchWithRetryAndTimeout(
-          () => {
-            const model = createModel();
-            return model.generateContentStream({ contents: [contents] });
-          },
-          { name: batchLabel },
-          3,
-          3000,
-          60000
-        );
-
-        let aggregated = "";
-        for await (const chunk of result.stream) {
-          if (chunk.text) aggregated += chunk.text();
-        }
-
-        // Step 3: Parse hasil dari Gemini
-        const lines = aggregated
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const results = [];
-
-        for (let idx = 0; idx < n; idx++) {
-          const raw = lines[idx] || "";
-          const upper = raw.toUpperCase();
-          let value = raw;
-          if (upper === "TIDAK_DITEMUKAN" || upper === "TIDAK DITEMUKAN") {
-            value = "TIDAK_DITEMUKAN";
-          } else {
-            const normalized = normalizePhoneFromText(raw);
-            if (normalized) value = normalized;
-          }
-          results.push(value);
-          console.log(`📞 [${batchLabel}] Gambar ${idx + 1} (${batchFiles[idx].name}): ${value}`);
-        }
-
-        return results;
-      };
-
       let lastBatchError = "";
 
-      // Fallback: kirim gambar langsung ke Gemini (tanpa OCR) jika OCR+teks gagal
-      const processBatchOfImagesDirect = async (batchFiles, batchIndex) => {
-        const n = batchFiles.length;
-        const parts = [];
-        for (const file of batchFiles) {
-          const imageBase64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result.split(",")[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-          parts.push({ inline_data: { mime_type: file.type, data: imageBase64 } });
-        }
-        const batchPrompt = promptInput.value.trim() +
-          `\n\n[Instruksi] Saya mengirim ${n} gambar. Untuk setiap gambar, ekstrak nomor telepon WA Indonesia. Berikan SATU nomor per baris (baris 1 = gambar 1, ...). Hanya nomor. Jika tidak ada: TIDAK_DITEMUKAN.`;
-        parts.push({ text: batchPrompt });
-        const contents = { role: "user", parts };
-        const result = await fetchWithRetryAndTimeout(
-          () => { const model = createModel(); return model.generateContentStream({ contents: [contents] }); },
-          { name: `Batch ${batchIndex + 1} (gambar langsung)` },
-          3, 3000, 60000
-        );
-        let aggregated = "";
-        for await (const chunk of result.stream) { if (chunk.text) aggregated += chunk.text(); }
-        const lines = aggregated.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-        const results = [];
-        for (let idx = 0; idx < n; idx++) {
-          const raw = lines[idx] || "";
-          const upper = raw.toUpperCase();
-          let value = raw;
-          if (upper === "TIDAK_DITEMUKAN" || upper === "TIDAK DITEMUKAN") value = "TIDAK_DITEMUKAN";
-          else { const n2 = normalizePhoneFromText(raw); if (n2) value = n2; }
-          results.push(value);
-        }
-        return results;
-      };
+      console.log(`📦 Batch mode: ${BATCH_SIZE} gambar per request → ${totalBatches} API call ke ${MODEL_NAME}`);
 
-      // Process images in batches of 10 (1 API call per batch)
       for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
         const batchFiles = allImages.slice(i, i + BATCH_SIZE);
         const batchIndex = Math.floor(i / BATCH_SIZE);
 
-        updateProgress(processedCount, totalFiles, `OCR + Gemini: Batch ${batchIndex + 1}/${totalBatches} (${batchFiles.length} gambar)`);
+        updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1}/${totalBatches} (${batchFiles.length} gambar → ${MODEL_NAME})`);
 
         try {
           const batchResults = await processBatchOfImages(batchFiles, batchIndex);
@@ -1050,30 +756,18 @@ function initializeApp() {
           updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1}/${totalBatches} selesai`);
         } catch (err) {
           lastBatchError = err?.message || String(err);
-          console.error(`❌ Batch ${batchIndex + 1} gagal (OCR+teks):`, err);
-          updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} gagal, mencoba fallback: gambar → Gemini...`);
-          try {
-            const batchResults = await processBatchOfImagesDirect(batchFiles, batchIndex);
-            for (const r of batchResults) { if (r !== "TIDAK_DITEMUKAN") currentResults.push(r); }
-            processedCount += batchFiles.length;
-            updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} selesai (fallback gambar)`);
-            console.log(`✅ Batch ${batchIndex + 1} berhasil via fallback (gambar → Gemini)`);
-          } catch (err2) {
-            console.error(`❌ Fallback batch ${batchIndex + 1} juga gagal:`, err2);
-            lastBatchError = lastBatchError + " | Fallback: " + (err2?.message || String(err2));
-            for (const f of batchFiles) failedFiles.push(f);
-            processedCount += batchFiles.length;
-            updateProgress(processedCount, totalFiles, `Batch ${batchIndex + 1} gagal, akan diulang`);
-          }
+          console.error(`❌ Batch ${batchIndex + 1} gagal:`, err);
+          for (const f of batchFiles) failedFiles.push(f);
+          processedCount += batchFiles.length;
         }
 
         if (i + BATCH_SIZE < totalFiles) {
           console.log("⏸️ Waiting before next batch...");
-          await sleep(5000);
+          await sleep(3000);
         }
       }
 
-      // Retry failed files automatically (tetap pakai batch 10 gambar / 1 request)
+      // Retry failed files
       const maxRetryRounds = 3;
       let retryRound = 1;
 
@@ -1090,16 +784,7 @@ function initializeApp() {
                 File yang akan diulang: <strong>${failedFiles.length}</strong><br>
                 Berhasil sejauh ini: <strong>${currentResults.length}</strong> nomor telepon
               </div>
-              <div style="margin-top: 8px;">
-                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #ff9800; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-              </div>
             </div>
-            <style>
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            </style>
           `;
         }
 
@@ -1113,51 +798,20 @@ function initializeApp() {
           const retryBatch = filesToRetry.slice(i, i + BATCH_SIZE);
           const retryBatchIndex = Math.floor(i / BATCH_SIZE);
 
-          if (output) {
-            const progress = Math.round(((retryProcessedCount + 1) / filesToRetry.length) * 100);
-            output.innerHTML = `
-              <div style="background-color: #fff3e0; padding: 16px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ff9800;">
-                <div style="color: #e65100; font-weight: bold; margin-bottom: 8px;">
-                  🔄 Mengulang file yang gagal (Putaran ${retryRound}/${maxRetryRounds})
-                </div>
-                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
-                  Progress: ${retryProcessedCount}/${filesToRetry.length} (${progress}%)
-                </div>
-                <div style="font-size: 12px; color: #555;">
-                  Batch ${retryBatchIndex + 1}: ${retryBatch.length} gambar
-                </div>
-                <div style="width: 100%; background-color: #e0e0e0; border-radius: 4px; margin-top: 8px;">
-                  <div style="width: ${progress}%; height: 6px; background-color: #ff9800; border-radius: 4px; transition: width 0.3s ease;"></div>
-                </div>
-              </div>
-            `;
-          }
-
           try {
             const batchResults = await processBatchOfImages(retryBatch, retryBatchIndex, retryRound);
             for (const r of batchResults) {
               if (r !== "TIDAK_DITEMUKAN") currentResults.push(r);
             }
             retryProcessedCount += retryBatch.length;
-            console.log(`✅ Retry batch ${retryBatchIndex + 1} berhasil (${retryBatch.length} gambar)`);
           } catch (err) {
             lastBatchError = err?.message || String(err);
-            try {
-              const batchResults = await processBatchOfImagesDirect(retryBatch, retryBatchIndex);
-              for (const r of batchResults) { if (r !== "TIDAK_DITEMUKAN") currentResults.push(r); }
-              retryProcessedCount += retryBatch.length;
-              console.log(`✅ Retry batch ${retryBatchIndex + 1} berhasil via fallback (gambar→Gemini)`);
-            } catch (err2) {
-              lastBatchError = (lastBatchError || "") + " | Fallback: " + (err2?.message || String(err2));
-              for (const f of retryBatch) failedFiles.push(f);
-              retryProcessedCount += retryBatch.length;
-              console.error(`❌ Retry batch ${retryBatchIndex + 1} gagal`);
-            }
+            for (const f of retryBatch) failedFiles.push(f);
+            retryProcessedCount += retryBatch.length;
           }
 
           if (i + BATCH_SIZE < filesToRetry.length) {
-            console.log("⏸️ Waiting before next retry batch...");
-            await sleep(5000);
+            await sleep(3000);
           }
         }
 
@@ -1170,15 +824,11 @@ function initializeApp() {
 
       // Complete
       isProcessing = false;
-
-      // Re-enable submit button
       if (submitButton) {
         submitButton.disabled = false;
         submitButton.textContent = "🚀 Mulai Scan Nomor Telepon";
-        console.log("🔓 Submit button re-enabled");
       }
 
-      // Show results
       console.log("✅ Processing completed!");
       console.log("📊 Results:", currentResults);
 
@@ -1192,6 +842,7 @@ function initializeApp() {
           <div style="background-color: ${resultColor}; color: ${textColor}; padding: 16px; margin: 12px 0; border-radius: 8px; text-align: center; border-left: 4px solid ${textColor};">
             <div style="font-weight: bold; margin-bottom: 8px; font-size: 18px;">${icon} Proses Selesai!</div>
             <div style="font-size: 14px; line-height: 1.8;">
+              Model AI: <strong>${MODEL_NAME}</strong><br>
               Total gambar diproses: <strong>${totalFiles}</strong><br>
               Nomor telepon ditemukan: <strong>${currentResults.length}</strong><br>
               Berhasil: <strong>${totalFiles - failedFiles.length}</strong> | Gagal: <strong>${failedFiles.length}</strong> (${successRate}% sukses)<br>
@@ -1206,31 +857,22 @@ function initializeApp() {
               <div style="margin-top: 8px; text-align: left; max-height: 150px; overflow-y: auto;">
                 ${failedFiles.map(f => `• ${f.name}`).join('<br>')}
               </div>
-              <div style="margin-top: 8px; font-size: 12px;">
-                <em>Tip: Coba upload file ini secara terpisah, periksa apakah file rusak, atau pastikan gambar berisi teks yang terbaca (OCR)</em>
-              </div>
             </div>
           ` : ''}
         `;
       }
 
-      // Show download button if we have results
       if (currentResults.length > 0 && downloadButton) {
         downloadButton.style.display = "block";
         setupDownloadButton();
-        console.log("📥 Download button enabled");
       }
     } catch (error) {
       console.error("💥 Main error:", error);
       isProcessing = false;
-
-      // Re-enable submit button
       if (submitButton) {
         submitButton.disabled = false;
         submitButton.textContent = "🚀 Mulai Scan Nomor Telepon";
       }
-
-      // Show error
       if (output) {
         output.innerHTML = `
           <div style="background-color: #ffcdd2; color: #d32f2f; padding: 16px; margin: 12px 0; border-radius: 8px; border-left: 4px solid #d32f2f;">
@@ -1238,8 +880,6 @@ function initializeApp() {
             <div style="font-size: 14px;">${error.message}</div>
           </div>
         `;
-
-        // Show download button if we have partial results
         if (currentResults.length > 0) {
           output.innerHTML += `
             <div style="background-color: #e8f5e8; color: #2e7d32; padding: 12px; margin: 8px 0; border-radius: 6px; font-size: 14px;">
@@ -1255,7 +895,7 @@ function initializeApp() {
     }
   });
 
-  // Add event listeners for file inputs
+  // File input event listeners
   if (imageInput && imageFileInfo) {
     imageInput.addEventListener("change", () => {
       console.log("📁 Image files selected:", imageInput.files.length);
@@ -1267,97 +907,20 @@ function initializeApp() {
     archiveInput.addEventListener("change", () => {
       console.log("📦 Archive files selected:", archiveInput.files.length);
       updateFileInfo(archiveInput, archiveFileInfo, "arsip");
-
-      // Show notification for archive files
-      if (archiveInput.files.length > 0) {
-        const archiveTypes = Array.from(archiveInput.files).map((f) => {
-          const name = f.name.toLowerCase();
-          if (name.endsWith(".rar")) return "RAR";
-          if (name.endsWith(".zip")) return "ZIP";
-          return "Unknown";
-        });
-
-        const notification = document.createElement("div");
-        notification.style.cssText =
-          "background-color: #e3f2fd; color: #1565c0; padding: 12px; margin: 8px 0; border-radius: 6px; font-size: 14px; border-left: 4px solid #2196f3;";
-        notification.innerHTML = `
-          📦 File arsip dipilih: ${Array.from(archiveInput.files)
-            .map((f) => f.name)
-            .join(", ")}<br>
-          <small>✅ ZIP akan diekstrak otomatis | ⚠️ RAR dalam pengembangan</small>
-        `;
-
-        // Remove any existing notifications
-        const existingNotifications = document.querySelectorAll(
-          ".archive-notification"
-        );
-        existingNotifications.forEach((n) => n.remove());
-
-        notification.className = "archive-notification";
-        archiveFileInfo.parentNode.insertBefore(
-          notification,
-          archiveFileInfo.nextSibling
-        );
-      }
     });
   }
 
-  // Initialize file info display
-  if (imageInput && imageFileInfo) {
-    updateFileInfo(imageInput, imageFileInfo, "gambar");
-  }
-  if (archiveInput && archiveFileInfo) {
-    updateFileInfo(archiveInput, archiveFileInfo, "arsip");
-  }
+  // Initialize file info
+  if (imageInput && imageFileInfo) updateFileInfo(imageInput, imageFileInfo, "gambar");
+  if (archiveInput && archiveFileInfo) updateFileInfo(archiveInput, archiveFileInfo, "arsip");
 
-  // Test function
-  window.testScan = function () {
-    console.log("🧪 Testing scan functionality...");
-    if (output) {
-      output.innerHTML = `
-        <div style="background-color: #e3f2fd; padding: 16px; border-radius: 8px; margin: 10px 0;">
-          <div style="color: #1976d2; font-weight: bold;">🧪 Test Mode Aktif</div>
-          <div style="font-size: 14px; color: #666; margin-top: 8px;">
-            ✅ Sistem siap digunakan!<br>
-            📁 Upload gambar atau ZIP dan klik tombol scan untuk memulai.<br>
-            🤖 AI Gemini siap memproses gambar Anda.<br>
-            📦 ZIP extraction sudah stabil dan siap digunakan.<br>
-            ⚠️ RAR extraction masih dalam pengembangan.
-          </div>
-        </div>
-      `;
-    }
-  };
-
-  // Test ZIP extraction
-  window.testZip = function () {
-    console.log("🧪 Testing ZIP extraction capabilities...");
-    console.log("Available extraction methods:");
-    console.log("✅ JSZip for ZIP files (stable)");
-    console.log("⚠️ RAR extraction (in development)");
-
-    if (output) {
-      output.innerHTML = `
-        <div style="background-color: #f3e5f5; padding: 16px; border-radius: 8px; margin: 10px 0;">
-          <div style="color: #7b1fa2; font-weight: bold;">📦 Archive Support Status</div>
-          <div style="font-size: 14px; color: #666; margin-top: 8px;">
-            ✅ <strong>ZIP files:</strong> Fully supported with JSZip<br>
-            ⚠️ <strong>RAR files:</strong> In development - use ZIP for best results<br>
-            📁 <strong>Direct images:</strong> Fully supported (JPG, PNG, WEBP, GIF, BMP)
-          </div>
-        </div>
-      `;
-    }
-  };
-
-  // Show API key banner if available
+  // Show API key banner
   if (API_KEYS.length > 0) {
     maybeShowApiKeyBanner(getCurrentApiKey());
   }
 
-  console.log("✅ App initialization completed successfully!");
-  console.log("🧪 You can test with: window.testScan()");
-  console.log("📦 Test archive support with: window.testZip()");
+  console.log("✅ App initialization completed!");
+  console.log(`🤖 Model: ${MODEL_NAME} (limit gratis besar, refresh cepat)`);
 }
 
 // Initialize when ready

@@ -257,27 +257,25 @@
     <div class="container">
       <header class="header">
         <h1>Phone Scanner AI</h1>
-        <p>Ekstrak nomor telepon dari gambar dan file RAR menggunakan AI</p>
+        <p>Ekstrak nomor telepon dari gambar menggunakan Gemma AI (gemma-3-27b-it)</p>
       </header>
 
       <main class="main-content">
         <div class="feature-grid">
           <div class="feature-card">
-            <h4>🤖 AI-Powered</h4>
+            <h4>🤖 Gemma AI Direct</h4>
             <p>
-              Menggunakan Google Gemini AI untuk mengenali teks dalam gambar
-              dengan akurasi tinggi
+              Gambar langsung dikirim ke Gemma 3 27B IT — tanpa OCR, lebih cepat &amp; akurat
             </p>
           </div>
           <div class="feature-card">
-            <h4>📦 RAR Support</h4>
-            <p>Ekstrak otomatis gambar dari file RAR dan proses secara batch</p>
+            <h4>📦 ZIP Support</h4>
+            <p>Ekstrak otomatis gambar dari file ZIP dan proses secara batch ke Gemma AI</p>
           </div>
           <div class="feature-card">
-            <h4>📊 Export Excel</h4>
+            <h4>⚡ Limit Besar</h4>
             <p>
-              Download hasil scanning dalam format Excel (.xlsx) untuk mudah
-              digunakan
+              Model gemma-3-27b-it memiliki limit gratis yang besar &amp; refresh cepat
             </p>
           </div>
         </div>
@@ -354,18 +352,6 @@
       </main>
     </div>
 
-    <!-- Tesseract.js untuk OCR (client-side, gratis) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script>
-      // Pastikan Tesseract tersedia sebelum load main.js
-      window.tesseractReady = false;
-      if (typeof Tesseract !== 'undefined') {
-        window.tesseractReady = true;
-        console.log('✅ Tesseract.js loaded');
-      } else {
-        console.warn('⚠️ Tesseract.js belum dimuat');
-      }
-    </script>
     <script type="module" src="/main.js"></script>
   </body>
 </html>
