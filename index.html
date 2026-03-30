@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phone Scanner - Extract Phone Numbers from Images</title>
+    <title>Phone Scanner AI - Scan & Download</title>
     <style>
       * {
         margin: 0;
@@ -228,39 +228,424 @@
       }
 
       @keyframes slideIn {
-        from {
-          opacity: 0;
-          transform: translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Loading spinner animation */
       @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
 
       .loading-spinner {
         animation: spin 1s linear infinite;
       }
+
+      /* ===== TAB NAVIGATION ===== */
+      .tab-nav {
+        display: flex;
+        background: rgba(0,0,0,0.15);
+        padding: 6px;
+        gap: 6px;
+      }
+
+      .tab-btn {
+        flex: 1;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: rgba(255,255,255,0.75);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .tab-btn:hover {
+        background: rgba(255,255,255,0.15);
+        color: white;
+      }
+
+      .tab-btn.active {
+        background: white;
+        color: #1976d2;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      /* ===== DOWNLOAD PAGE STYLES ===== */
+      .dl-upload-area {
+        border: 2px dashed #90caf9;
+        border-radius: 12px;
+        padding: 36px 20px;
+        text-align: center;
+        cursor: pointer;
+        background: #f0f8ff;
+        transition: all 0.25s ease;
+        margin-bottom: 20px;
+      }
+
+      .dl-upload-area:hover, .dl-upload-area.drag-over {
+        border-color: #1976d2;
+        background: #e3f2fd;
+      }
+
+      .dl-upload-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+
+      .dl-upload-area h3 {
+        color: #1976d2;
+        margin-bottom: 6px;
+        font-size: 18px;
+      }
+
+      .dl-upload-area p {
+        color: #666;
+        font-size: 13px;
+      }
+
+      .dl-stats-bar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      .dl-stat {
+        flex: 1;
+        min-width: 100px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 12px 16px;
+        text-align: center;
+        border-left: 4px solid #2196f3;
+      }
+
+      .dl-stat-num {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1976d2;
+      }
+
+      .dl-stat-label {
+        font-size: 12px;
+        color: #888;
+        margin-top: 2px;
+      }
+
+      .dl-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .dl-control-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 200px;
+      }
+
+      .dl-control-group label {
+        font-size: 13px;
+        color: #555;
+        white-space: nowrap;
+        font-weight: 500;
+      }
+
+      .dl-control-group input[type="text"],
+      .dl-control-group select {
+        flex: 1;
+        padding: 8px 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 13px;
+        background: #fafafa;
+      }
+
+      .dl-control-group input[type="text"]:focus,
+      .dl-control-group select:focus {
+        outline: none;
+        border-color: #2196f3;
+        background: white;
+      }
+
+      .dl-action-btns {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      .dl-btn {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .dl-btn:hover { transform: translateY(-1px); }
+      .dl-btn:active { transform: translateY(0); }
+      .dl-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+      .dl-btn-primary {
+        background: linear-gradient(135deg, #1976d2, #1565c0);
+        color: white;
+        box-shadow: 0 2px 8px rgba(25,118,210,0.3);
+      }
+
+      .dl-btn-success {
+        background: linear-gradient(135deg, #4caf50, #388e3c);
+        color: white;
+        box-shadow: 0 2px 8px rgba(76,175,80,0.3);
+      }
+
+      .dl-btn-warning {
+        background: linear-gradient(135deg, #ff9800, #f57c00);
+        color: white;
+        box-shadow: 0 2px 8px rgba(255,152,0,0.3);
+      }
+
+      .dl-btn-danger {
+        background: linear-gradient(135deg, #f44336, #c62828);
+        color: white;
+        box-shadow: 0 2px 8px rgba(244,67,54,0.3);
+      }
+
+      .dl-table-wrapper {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        margin-bottom: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .dl-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .dl-table th {
+        background: #1976d2;
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        white-space: nowrap;
+      }
+
+      .dl-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dl-table tr:hover td { background: #f5f5f5; }
+
+      .dl-table tr.selected td { background: #e3f2fd; }
+
+      .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .status-pending { background: #fff3e0; color: #e65100; }
+      .status-downloading { background: #e3f2fd; color: #1565c0; }
+      .status-done { background: #e8f5e8; color: #2e7d32; }
+      .status-error { background: #ffebee; color: #c62828; }
+      .status-skip { background: #f5f5f5; color: #9e9e9e; }
+
+      .dl-progress-wrap {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-left: 4px solid #2196f3;
+        display: none;
+      }
+
+      .dl-progress-wrap.visible { display: block; }
+
+      .dl-progress-title {
+        font-weight: 600;
+        color: #1976d2;
+        margin-bottom: 10px;
+        font-size: 15px;
+      }
+
+      .dl-progress-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+
+      .dl-progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #2196f3, #1976d2);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .dl-progress-info {
+        font-size: 13px;
+        color: #666;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .dl-log {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        border-radius: 8px;
+        padding: 14px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+        line-height: 1.6;
+        display: none;
+      }
+
+      .dl-log.visible { display: block; }
+
+      .dl-log-line { margin: 0; padding: 1px 0; }
+      .dl-log-line.ok { color: #81c784; }
+      .dl-log-line.err { color: #ef9a9a; }
+      .dl-log-line.info { color: #90caf9; }
+
+      .dl-thumb {
+        width: 36px;
+        height: 36px;
+        object-fit: cover;
+        border-radius: 4px;
+        vertical-align: middle;
+        cursor: pointer;
+      }
+
+      .dl-thumb-placeholder {
+        width: 36px;
+        height: 36px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        vertical-align: middle;
+      }
+
+      .preview-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.85);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .preview-modal.open {
+        display: flex;
+      }
+
+      .preview-modal img {
+        max-width: 90vw;
+        max-height: 90vh;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      }
+
+      .preview-modal-close {
+        position: fixed;
+        top: 20px;
+        right: 24px;
+        color: white;
+        font-size: 32px;
+        cursor: pointer;
+        background: rgba(255,255,255,0.15);
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+      }
+
+      @media (max-width: 600px) {
+        .dl-stats-bar { gap: 8px; }
+        .dl-action-btns { flex-direction: column; }
+        .dl-btn { width: 100%; justify-content: center; }
+      }
     </style>
   </head>
   <body>
+    <!-- Image Preview Modal -->
+    <div class="preview-modal" id="previewModal" role="dialog" aria-modal="true">
+      <button class="preview-modal-close" id="previewModalClose" aria-label="Tutup preview">✕</button>
+      <img src="" alt="Preview gambar" id="previewModalImg" />
+    </div>
+
     <div class="container">
       <header class="header">
         <h1>Phone Scanner AI</h1>
         <p>Ekstrak nomor telepon dari gambar menggunakan Gemma AI (gemma-3-27b-it)</p>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav" role="tablist" aria-label="Halaman utama">
+          <button class="tab-btn active" id="tabBtnScan" role="tab" aria-selected="true" data-tab="scan">
+            🔍 Scan Gambar
+          </button>
+          <button class="tab-btn" id="tabBtnDownload" role="tab" aria-selected="false" data-tab="download">
+            📥 Download dari Excel
+          </button>
+        </nav>
       </header>
 
       <main class="main-content">
+
+        <!-- ===== TAB: SCAN ===== -->
+        <div class="tab-panel active" id="panelScan" role="tabpanel">
+
         <div class="feature-grid">
           <div class="feature-card">
             <h4>🤖 Gemma AI Direct</h4>
@@ -349,6 +734,108 @@
             </p>
           </div>
         </div>
+
+        </div><!-- end panelScan -->
+
+        <!-- ===== TAB: DOWNLOAD DARI EXCEL ===== -->
+        <div class="tab-panel" id="panelDownload" role="tabpanel">
+
+          <!-- Upload Area -->
+          <div class="dl-upload-area" id="dlUploadArea">
+            <input type="file" id="dlExcelInput" accept=".xlsx,.xls,.csv" style="display:none" />
+            <div class="dl-upload-icon">📊</div>
+            <h3>Upload File Excel</h3>
+            <p>Klik atau drag &amp; drop file Excel (.xlsx, .xls, .csv) yang berisi kolom Image URI, Post Date, Post URL</p>
+            <p style="margin-top:8px; color:#90caf9;">Format kolom: <strong>Image URI</strong> | <strong>Post Date</strong> | <strong>Post URL</strong></p>
+          </div>
+
+          <!-- Stats -->
+          <div class="dl-stats-bar" id="dlStatsBar" style="display:none">
+            <div class="dl-stat">
+              <div class="dl-stat-num" id="dlStatTotal">0</div>
+              <div class="dl-stat-label">Total Link</div>
+            </div>
+            <div class="dl-stat" style="border-color:#4caf50">
+              <div class="dl-stat-num" id="dlStatDone" style="color:#2e7d32">0</div>
+              <div class="dl-stat-label">Berhasil</div>
+            </div>
+            <div class="dl-stat" style="border-color:#f44336">
+              <div class="dl-stat-num" id="dlStatError" style="color:#c62828">0</div>
+              <div class="dl-stat-label">Gagal</div>
+            </div>
+            <div class="dl-stat" style="border-color:#ff9800">
+              <div class="dl-stat-num" id="dlStatPending" style="color:#e65100">0</div>
+              <div class="dl-stat-label">Belum Diunduh</div>
+            </div>
+          </div>
+
+          <!-- Filter & Controls -->
+          <div class="dl-controls" id="dlControls" style="display:none">
+            <div class="dl-control-group">
+              <label for="dlFilterDate">📅 Filter Tanggal:</label>
+              <input type="text" id="dlFilterDate" placeholder="Contoh: 2026-03-29" />
+            </div>
+            <div class="dl-control-group">
+              <label for="dlFilterStatus">🔍 Filter Status:</label>
+              <select id="dlFilterStatus">
+                <option value="all">Semua</option>
+                <option value="pending">Belum Diunduh</option>
+                <option value="done">Berhasil</option>
+                <option value="error">Gagal</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="dl-action-btns" id="dlActionBtns" style="display:none">
+            <button class="dl-btn dl-btn-primary" id="dlBtnDownloadAll">
+              ⬇️ Download Semua Gambar
+            </button>
+            <button class="dl-btn dl-btn-warning" id="dlBtnDownloadFiltered">
+              🔍 Download yang Difilter
+            </button>
+            <button class="dl-btn dl-btn-success" id="dlBtnSaveZip" disabled>
+              📦 Simpan sebagai ZIP
+            </button>
+            <button class="dl-btn dl-btn-danger" id="dlBtnReset">
+              🗑️ Reset
+            </button>
+          </div>
+
+          <!-- Progress -->
+          <div class="dl-progress-wrap" id="dlProgressWrap">
+            <div class="dl-progress-title" id="dlProgressTitle">⏳ Mengunduh gambar...</div>
+            <div class="dl-progress-bar-bg">
+              <div class="dl-progress-bar-fill" id="dlProgressBarFill"></div>
+            </div>
+            <div class="dl-progress-info">
+              <span id="dlProgressText">0 / 0</span>
+              <span id="dlProgressPct">0%</span>
+            </div>
+          </div>
+
+          <!-- Log -->
+          <div class="dl-log" id="dlLog"></div>
+
+          <!-- Table -->
+          <div class="dl-table-wrapper" id="dlTableWrapper" style="display:none">
+            <table class="dl-table" id="dlTable">
+              <thead>
+                <tr>
+                  <th style="width:44px">No</th>
+                  <th style="width:50px">Preview</th>
+                  <th>Image URI</th>
+                  <th style="width:110px">Tanggal</th>
+                  <th>Post URL</th>
+                  <th style="width:100px">Status</th>
+                </tr>
+              </thead>
+              <tbody id="dlTableBody"></tbody>
+            </table>
+          </div>
+
+        </div><!-- end panelDownload -->
+
       </main>
     </div>
 
